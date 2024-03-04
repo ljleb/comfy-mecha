@@ -59,7 +59,7 @@ class MechaMerger:
     ):
         sd_mecha.set_log_level()
         merger = sd_mecha.RecipeMerger(
-            models_dir=folder_paths.models_dir,
+            models_dir=folder_paths.get_folder_paths("checkpoints"),
             default_device=default_merge_device,
             default_dtype=DTYPE_MAPPING[default_merge_dtype],
         )
@@ -129,7 +129,7 @@ class ModelMechaRecipe:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "model_path": (os.listdir(folder_paths.models_dir),),
+                "model_path": ([f for p in folder_paths.get_folder_paths("checkpoints") for f in os.listdir(p) if f.endswith(".safetensors")],),
                 "model_arch": (sd_mecha.extensions.model_arch.get_all(),),
                 "model_type": ("STRING", {"default": "base"}),
             },
@@ -146,34 +146,6 @@ class ModelMechaRecipe:
         model_type: str,
     ):
         return sd_mecha.model(model_path, model_arch=model_arch, model_type=model_type),
-
-
-def convert_unet_key(k):
-    return f"model.{k}"
-
-
-def convert_clip_l_key(k):
-    return "conditioner.embedders.0." + k[len("clip_l."):]
-
-
-# text_model.encoder.layers: resblocks
-# self_attn: attn
-# mlp_fc1: mlp_c_fc
-# mlp_fc2: mlp_c_proj, [q_proj.weight, k_proj.weight, v_proj.weight]: in_proj_weight
-# [q_proj.bias, k_proj.bias, v_proj.bias]: bias
-def map_clip_g(k, out_state_dict, clip_state_dict):
-    v = clip_state_dict[k]
-    k_out = k.replace(".self_attn.", ".attn.")
-    k_out = k_out.replace(".mlp_fc1.", ".mlp_c_fc.")
-    k_out = k_out.replace(".mlp_fc2.", ".mlp_c_proj.")
-
-    if "k_proj" in k:
-        q_k = k.replace(".k_proj.", ".q_proj.")
-        v_k = k.replace(".k_proj.", ".v_proj.")
-        k_out = k_out.replace(".k_proj.", ".in_proj_")
-        v = torch.vstack([clip_state_dict[q_k], v, clip_state_dict[v_k]])
-
-    out_state_dict["conditioner.embedders.1." + k_out[len("clip_g."):]] = v
 
 
 NODE_CLASS_MAPPINGS = {
