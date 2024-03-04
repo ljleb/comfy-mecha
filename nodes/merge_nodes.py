@@ -57,7 +57,6 @@ class MechaMerger:
         total_buffer_size: int,
         threads: int,
     ):
-        sd_mecha.set_log_level()
         merger = sd_mecha.RecipeMerger(
             models_dir=folder_paths.get_folder_paths("checkpoints"),
             default_device=default_merge_device,
