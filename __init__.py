@@ -24,7 +24,7 @@ except ImportError:
 
     def run_script(cmd, cwd='.'):
         if len(cmd) > 0 and cmd[0].startswith("#"):
-            print(f"[ComfyUI-Manager] Unexpected behavior: `{cmd}`")
+            print(f"[Mecha] Unexpected behavior: `{cmd}`")
             return 0
 
         process = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
@@ -43,4 +43,4 @@ except ImportError:
     requirements_path = pathlib.Path(__file__).parent / "requirements.txt"
     run_script([sys.executable, '-s', '-m', 'pip', 'install', '-r', str(requirements_path)])
 
-from .nodes import NODE_CLASS_MAPPINGS
+from .nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS

@@ -1,9 +1,7 @@
 from typing import Optional
 import sd_mecha
 import torch.cuda
-from sd_mecha import Hyper
 from sd_mecha.extensions.merge_method import MergeMethod
-from sd_mecha.recipe_nodes import RecipeNode
 import folder_paths
 import comfy
 from comfy import model_management, model_detection
