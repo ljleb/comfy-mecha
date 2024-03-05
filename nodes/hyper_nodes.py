@@ -1,7 +1,7 @@
 import sd_mecha
 
 
-class DefaultMechaHyper:
+class BlockMechaHyper:
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -26,11 +26,11 @@ class DefaultMechaHyper:
             model_arch=model_arch,
             model_components=[model_component] if model_component else None,
             value=value,
-        )
+        ),
 
 
 NODE_CLASS_MAPPINGS = {
-    "Default Mecha Hyper": DefaultMechaHyper,
+    "Default Mecha Hyper": BlockMechaHyper,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {

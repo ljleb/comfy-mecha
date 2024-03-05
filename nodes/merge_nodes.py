@@ -1,9 +1,8 @@
-import os
-import pathlib
-
 import sd_mecha
 import torch.cuda
+import tqdm
 from sd_mecha.extensions.merge_method import MergeMethod
+
 import folder_paths
 import comfy
 from comfy import model_management, model_detection
@@ -13,16 +12,20 @@ from comfy.sd import CLIP
 class MechaMerger:
     @classmethod
     def INPUT_TYPES(cls):
+        all_cuda_devices = ["cpu", *(["cuda", *[f"cuda:{i}" for i in range(torch.cuda.device_count())]] if torch.cuda.is_available() else [])]
         return {
             "required": {
                 "recipe": ("MECHA_RECIPE",),
-                "device": (["cpu", *(["cuda", *[f"cuda:{i}" for i in range(torch.cuda.device_count())]] if torch.cuda.is_available() else [])], {
+                "fallback_model": (["none"] + [f for f in folder_paths.get_filename_list("checkpoints") if f.endswith(".safetensors")], {
+                    "default": "none",
+                }),
+                "output_device": (all_cuda_devices, {
                     "default": "cpu",
                 }),
-                "dtype": (list(DTYPE_MAPPING.keys()), {
+                "output_dtype": (list(DTYPE_MAPPING.keys()), {
                     "default": "fp16",
                 }),
-                "default_merge_device": (["cpu", *(["cuda", *[f"cuda:{i}" for i in range(torch.cuda.device_count())]] if torch.cuda.is_available() else [])], {
+                "default_merge_device": (all_cuda_devices, {
                     "default": "cuda" if torch.cuda.is_available() else "cpu",
                 }),
                 "default_merge_dtype": (list(DTYPE_MAPPING.keys()), {
@@ -50,28 +53,54 @@ class MechaMerger:
     def execute(
         self,
         recipe: sd_mecha.recipe_nodes.RecipeNode,
-        device: str,
-        dtype: str,
+        fallback_model: str,
+        output_device: str,
+        output_dtype: str,
         default_merge_device: str,
         default_merge_dtype: str,
         total_buffer_size: int,
         threads: int,
     ):
+        model_arch = recipe.model_arch.identifier
+        if fallback_model == "none" or not model_arch:
+            fallback_model = None
+        else:
+            fallback_model = sd_mecha.model(fallback_model, model_arch=model_arch)
+
         merger = sd_mecha.RecipeMerger(
             models_dir=folder_paths.get_folder_paths("checkpoints"),
             default_device=default_merge_device,
             default_dtype=DTYPE_MAPPING[default_merge_dtype],
+            tqdm=ComfyTqdm,
         )
         state_dict = {}
+        model_management.unload_all_models()
         merger.merge_and_save(
             recipe=recipe,
             output=state_dict,
-            save_dtype=DTYPE_MAPPING[dtype],
-            save_device=device,
+            fallback_model=fallback_model,
+            save_dtype=DTYPE_MAPPING[output_dtype],
+            save_device=output_device,
             threads=threads if threads > 0 else None,
             total_buffer_size=total_buffer_size,
         )
         return load_checkpoint_guess_config(state_dict)
+
+
+class ComfyTqdm:
+    def __init__(self, *args, **kwargs):
+        self.progress = tqdm.tqdm(*args, **kwargs)
+        self.comfy_progress = comfy.utils.ProgressBar(kwargs["total"])
+
+    def update(self):
+        self.progress.update()
+        self.comfy_progress.update_absolute(self.progress.n, self.progress.total)
+
+    def __getattr__(self, item):
+        try:
+            return self.__dict__[item]
+        except KeyError:
+            return getattr(self.progress, item)
 
 
 def load_checkpoint_guess_config(state_dict):
@@ -128,9 +157,9 @@ class ModelMechaRecipe:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "model_path": ([f for p in folder_paths.get_folder_paths("checkpoints") for f in os.listdir(p) if f.endswith(".safetensors")],),
+                "model_path": ([f for f in folder_paths.get_filename_list("checkpoints") if f.endswith(".safetensors")],),
                 "model_arch": (sd_mecha.extensions.model_arch.get_all(),),
-                "model_type": ("STRING", {"default": "base"}),
+                "model_type": (["base", "lora"], {"default": "base"}),
             },
         }
     RETURN_TYPES = ("MECHA_RECIPE",)
@@ -177,10 +206,10 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
             "required": {
                 **{
                     model_name: ("MECHA_RECIPE",)
-                    for model_name in method.get_model_names()
+                    for model_name, merge_space in zip(method.get_model_names(), method.get_input_merge_spaces()[0])
                 },
                 **{
-                    hyper_name: ("HYPER",)
+                    hyper_name: ("*",)
                     for hyper_name in method.get_hyper_names() - method.get_volatile_hyper_names()
                     if hyper_name not in method.get_default_hypers()
                 },
@@ -193,29 +222,38 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
             },
             "optional": {
                 **{
-                    hyper_name: ("HYPER", {"default": method.get_default_hypers()[hyper_name]})
+                    hyper_name: ("*", {"default": method.get_default_hypers()[hyper_name]})
                     for hyper_name in method.get_hyper_names() - method.get_volatile_hyper_names()
                     if hyper_name in method.get_default_hypers()
                 },
             },
         },
         "RETURN_TYPES": ("MECHA_RECIPE",),
+        "RETURN_NAMES": ("recipe",),
         "FUNCTION": "execute",
         "OUTPUT_NODE": False,
         "CATEGORY": "advanced/model_merging/mecha",
-        "execute": lambda *_args, **kwargs: (method.create_recipe(*[kwargs[m] for m in method.get_model_names()], **get_method_kwargs(method, kwargs)),),
+        "execute": get_method_node_execute(method),
     })
 
 
-def get_method_kwargs(method, kwargs):
-    kwargs["dtype"] = OPTIONAL_DTYPE_MAPPING[kwargs["dtype"]]
-    if kwargs["device"] == "default":
-        kwargs["device"] = None
-    return {
-        k: kwargs[k]
-        for k in method.get_hyper_names()
-        if k in kwargs
-    }
+def get_method_node_execute(method: MergeMethod):
+    def execute(*_args, **kwargs):
+        dtype = OPTIONAL_DTYPE_MAPPING[kwargs["dtype"]]
+        device = kwargs["device"]
+        if device == "default":
+            device = None
+
+        models = [kwargs[m] for m in method.get_model_names()]
+        hypers = {
+            k: kwargs[k]
+            for k in method.get_hyper_names()
+            if k in kwargs
+        }
+
+        return method.create_recipe(*models, **hypers, dtype=dtype, device=device),
+
+    return execute
 
 
 def snake_case_to_upper(name: str):
