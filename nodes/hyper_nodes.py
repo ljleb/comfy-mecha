@@ -38,7 +38,6 @@ class BlocksMechaHyper:
         try:
             return sd_mecha.default(
                 model_arch=model_arch,
-                model_components=[model_component] if model_component else None,
                 value=default,
             ) | sd_mecha.blocks(
                 model_arch,
