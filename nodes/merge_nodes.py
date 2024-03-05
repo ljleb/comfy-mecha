@@ -19,17 +19,17 @@ class MechaMerger:
                 "fallback_model": (["none"] + [f for f in folder_paths.get_filename_list("checkpoints") if f.endswith(".safetensors")], {
                     "default": "none",
                 }),
-                "output_device": (all_cuda_devices, {
-                    "default": "cpu",
-                }),
-                "output_dtype": (list(DTYPE_MAPPING.keys()), {
-                    "default": "fp16",
-                }),
                 "default_merge_device": (all_cuda_devices, {
                     "default": "cuda" if torch.cuda.is_available() else "cpu",
                 }),
                 "default_merge_dtype": (list(DTYPE_MAPPING.keys()), {
                     "default": "fp64",
+                }),
+                "output_device": (all_cuda_devices, {
+                    "default": "cpu",
+                }),
+                "output_dtype": (list(DTYPE_MAPPING.keys()), {
+                    "default": "fp16",
                 }),
                 "total_buffer_size": ("INT", {
                     "default": 2**28,
