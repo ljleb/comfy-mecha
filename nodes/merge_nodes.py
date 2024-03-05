@@ -61,7 +61,7 @@ class MechaMerger:
         total_buffer_size: int,
         threads: int,
     ):
-        model_arch = recipe.model_arch.identifier
+        model_arch = getattr(recipe.model_arch, "identifier", None)
         if fallback_model == "none" or not model_arch:
             fallback_model = None
         else:
