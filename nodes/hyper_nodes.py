@@ -11,6 +11,8 @@ class BlocksMechaHyper:
                 }),
                 "default": ("FLOAT", {
                     "default": 0.0,
+                    "min": -2**64,
+                    "max": 2**64,
                     "step": 0.1,
                 }),
                 "model_arch": (sd_mecha.extensions.model_arch.get_all(),),
