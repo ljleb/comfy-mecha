@@ -40,7 +40,7 @@ def run_script(cmd, cwd='.'):
 
 
 requirements_path = pathlib.Path(__file__).parent / "requirements.txt"
-run_script([sys.executable, '-s', '-m', 'pip', 'install', '-r', str(requirements_path)])
+run_script([sys.executable, '-s', '-m', 'pip', 'install', '-U', '-r', str(requirements_path)])
 
 
 from .nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
