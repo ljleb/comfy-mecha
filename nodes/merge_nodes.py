@@ -1,6 +1,7 @@
 import functools
 import gc
 import logging
+import re
 import textwrap
 from typing import TypeVar, Optional
 
@@ -79,11 +80,8 @@ class MechaMerger:
                 "output_dtype": (list(DTYPE_MAPPING.keys()), {
                     "default": "fp16",
                 }),
-                "total_buffer_size": ("INT", {
-                    "default": 2**28,
-                    "min": 2**8,
-                    "max": 2**34,
-                    "step": 2**8,
+                "total_buffer_size": ("STRING", {
+                    "default": "500M",
                 }),
                 "threads": ("INT", {
                     "default": 0,
@@ -109,12 +107,13 @@ class MechaMerger:
         output_dtype: str,
         default_merge_device: str,
         default_merge_dtype: str,
-        total_buffer_size: int,
+        total_buffer_size: str,
         threads: int,
         temporary_merge: str,
     ):
         global cached_merges_to_delete, prompt_executor
         temporary_merge = temporary_merge == "True"
+        total_buffer_size = memory_to_bytes(total_buffer_size)
 
         model_management.unload_all_models()
         free_cached_merges(prompt_executor)
@@ -146,6 +145,51 @@ class MechaMerger:
         if temporary_merge:
             cached_merges_to_delete.extend(res)
         return res
+
+
+memory_suffix_re = re.compile(r'(\d+(\.\d+)?)\s*([BKMGTP]?)$')
+
+
+def memory_to_bytes(memory_str: str) -> int:
+    """
+    Convert a memory size string containing multiple terms (like '1G 500K') to the total number of bytes.
+
+    Args:
+    memory_str (str): Memory size string with multiple terms, each consisting of a number followed by a unit:
+                      B - bytes
+                      K - kilobytes
+                      M - megabytes
+                      G - gigabytes
+                      T - terabytes
+                      P - petabytes
+
+    Returns:
+    int: The total equivalent memory in bytes, always as an integer.
+    """
+    units = {
+        'B': 1,
+        'K': 1024,
+        'M': 1024 ** 2,
+        'G': 1024 ** 3,
+        'T': 1024 ** 4,
+        'P': 1024 ** 5
+    }
+
+    total_bytes = 0
+    terms = memory_str.upper().split()
+    for term in terms:
+        match = memory_suffix_re.match(term)
+        if not match:
+            continue
+
+        # Get the number and the unit
+        number = float(match.group(1))
+        unit = match.group(3) if match.group(3) else 'B'  # Default to bytes if no unit specified
+
+        # Round and convert to integer then add to the total bytes
+        total_bytes += round(number * units[unit])
+
+    return total_bytes
 
 
 class ComfyTqdm:
@@ -259,7 +303,7 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
                     for model_name, merge_space in zip(method.get_model_names(), method.get_input_merge_spaces()[0])
                 },
                 **{
-                    hyper_name: ("*",)
+                    hyper_name: ("HYPER",)
                     for hyper_name in method.get_hyper_names() - method.get_volatile_hyper_names()
                     if hyper_name not in method.get_default_hypers()
                 },
@@ -272,7 +316,7 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
             },
             "optional": {
                 **{
-                    hyper_name: ("*", {"default": method.get_default_hypers()[hyper_name]})
+                    hyper_name: ("HYPER", {"default": method.get_default_hypers()[hyper_name]})
                     for hyper_name in method.get_hyper_names() - method.get_volatile_hyper_names()
                     if hyper_name in method.get_default_hypers()
                 },

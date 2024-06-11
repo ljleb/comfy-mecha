@@ -51,10 +51,37 @@ class BlocksMechaHyper:
             raise ValueError(f"Wrong number of blocks for model architecture '{model_arch}'") from e
 
 
+class FloatMechaHyper:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "value": ("FLOAT", {
+                    "default": 0.0,
+                    "min": -2**64,
+                    "max": 2**64,
+                    "step": 0.1,
+                }),
+            },
+        }
+    RETURN_TYPES = ("HYPER",)
+    FUNCTION = "execute"
+    OUTPUT_NODE = False
+    CATEGORY = "advanced/model_merging/mecha"
+
+    def execute(
+        self,
+        value: float,
+    ):
+        return value,
+
+
 NODE_CLASS_MAPPINGS = {
     "Blocks Mecha Hyper": BlocksMechaHyper,
+    "Float Mecha Hyper": FloatMechaHyper,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Blocks Mecha Hyper": "Blocks",
+    "Float Mecha Hyper": "Float",
 }
