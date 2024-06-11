@@ -1,6 +1,6 @@
 [project]
 name = "comfy-mecha"
-description = "Nodes:Blocks Mecha Hyper, Mecha Merger, Model Mecha Recipe, Custom Code Mecha Recipe"
+description = "model merging nodes powered by sd-mecha, a memory efficient state dict recipe merger"
 version = "1.0.0"
 license = "LICENSE"
 dependencies = ["sd-mecha>=0.0.14"]
