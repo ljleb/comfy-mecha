@@ -3,13 +3,13 @@ name = "comfy-mecha"
 description = "Nodes:Blocks Mecha Hyper, Mecha Merger, Model Mecha Recipe, Custom Code Mecha Recipe"
 version = "1.0.0"
 license = "LICENSE"
-dependencies = ["sd-mecha>=0.0.7"]
+dependencies = ["sd-mecha>=0.0.14"]
 
 [project.urls]
 Repository = "https://github.com/ljleb/comfy-mecha"
 #  Used by Comfy Registry https://comfyregistry.org
 
 [tool.comfy]
-PublisherId = ""
-DisplayName = "comfy-mecha"
+PublisherId = "ljleb"
+DisplayName = "mecha"
 Icon = ""
