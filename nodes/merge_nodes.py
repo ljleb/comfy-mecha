@@ -81,7 +81,7 @@ class MechaMerger:
                     "default": "fp16",
                 }),
                 "total_buffer_size": ("STRING", {
-                    "default": "500M",
+                    "default": "0.5G",
                 }),
                 "threads": ("INT", {
                     "default": 0,
@@ -147,7 +147,9 @@ class MechaMerger:
         return res
 
 
-memory_suffix_re = re.compile(r'(\d+(\.\d+)?)\s*([BKMGTP]?)$')
+memory_units = ('B', 'K', 'M', 'G')
+memory_suffix_re = re.compile(rf'(\d+(\.\d+)?)\s*([{"".join(memory_units)}]?)$')
+memory_units_map = {u: 1024 ** i for i, u in enumerate(memory_units)}
 
 
 def memory_to_bytes(memory_str: str) -> int:
@@ -166,15 +168,6 @@ def memory_to_bytes(memory_str: str) -> int:
     Returns:
     int: The total equivalent memory in bytes, always as an integer.
     """
-    units = {
-        'B': 1,
-        'K': 1024,
-        'M': 1024 ** 2,
-        'G': 1024 ** 3,
-        'T': 1024 ** 4,
-        'P': 1024 ** 5
-    }
-
     total_bytes = 0
     terms = memory_str.upper().split()
     for term in terms:
@@ -182,14 +175,11 @@ def memory_to_bytes(memory_str: str) -> int:
         if not match:
             continue
 
-        # Get the number and the unit
         number = float(match.group(1))
-        unit = match.group(3) if match.group(3) else 'B'  # Default to bytes if no unit specified
+        unit = match.group(3) if match.group(3) else 'B'
+        total_bytes += number * memory_units_map[unit]
 
-        # Round and convert to integer then add to the total bytes
-        total_bytes += round(number * units[unit])
-
-    return total_bytes
+    return round(total_bytes)
 
 
 class ComfyTqdm:
