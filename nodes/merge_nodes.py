@@ -2,7 +2,7 @@ import functools
 import gc
 import logging
 import textwrap
-from typing import TypeVar
+from typing import TypeVar, Optional
 
 import sd_mecha
 import torch.cuda
@@ -18,8 +18,8 @@ from comfy.sd import CLIP
 import execution
 
 
-intermediates_to_delete = list()
-executor = None
+cached_merges_to_delete = list()
+prompt_executor: Optional[execution.PromptExecutor] = None
 
 
 def patch_prompt_executor():
@@ -30,23 +30,28 @@ def patch_prompt_executor():
 
 
 def prompt_executor_execute(self, *args, __original_function, **kwargs):
-    res = __original_function(self, *args, **kwargs)
-    delete_intermediates(self)
-    return res
+    global prompt_executor
+    prompt_executor = self
+    free_cached_merges(self)
+    return __original_function(self, *args, **kwargs)
 
 
-def delete_intermediates(prompt_executor: execution.PromptExecutor):
+def free_cached_merges(prompt_executor: execution.PromptExecutor):
+    global cached_merges_to_delete
+    if not cached_merges_to_delete:
+        return
+
     for k, v in prompt_executor.outputs.copy().items():
         for v in v:
             for v in v:
-                if v in intermediates_to_delete and k in prompt_executor.outputs:
+                if v in cached_merges_to_delete and k in prompt_executor.outputs:
                     prompt_executor.outputs.pop(k)
-                    intermediates_to_delete.remove(v)
 
     del k, v
+    cached_merges_to_delete.clear()
+    model_management.cleanup_models()
     gc.collect()
     model_management.soft_empty_cache()
-    model_management.cleanup_models()
 
 
 patch_prompt_executor()
@@ -87,7 +92,7 @@ class MechaMerger:
                     "step": 1,
                 }),
                 "temporary_merge": (["True", "False"], {
-                    "default": "False",
+                    "default": "True",
                 })
             },
         }
@@ -108,8 +113,12 @@ class MechaMerger:
         threads: int,
         temporary_merge: str,
     ):
-        model_management.unload_all_models()
+        global cached_merges_to_delete, prompt_executor
         temporary_merge = temporary_merge == "True"
+
+        model_management.unload_all_models()
+        free_cached_merges(prompt_executor)
+
         model_arch = getattr(recipe.model_arch, "identifier", None)
         if fallback_model == "none" or not model_arch:
             fallback_model = None
@@ -135,7 +144,7 @@ class MechaMerger:
         )
         res = load_checkpoint_guess_config(state_dict)
         if temporary_merge:
-            intermediates_to_delete.extend(res)
+            cached_merges_to_delete.extend(res)
         return res
 
 
