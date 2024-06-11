@@ -1,4 +1,6 @@
 import functools
+import gc
+import logging
 import textwrap
 from typing import TypeVar
 
@@ -13,6 +15,41 @@ import folder_paths
 import comfy
 from comfy import model_management, model_detection
 from comfy.sd import CLIP
+import execution
+
+
+intermediates_to_delete = list()
+executor = None
+
+
+def patch_prompt_executor():
+    patch_key = "__mecha_execute_original"
+    if not hasattr(execution.PromptExecutor, patch_key):
+        setattr(execution.PromptExecutor, patch_key, execution.PromptExecutor.execute)
+        execution.PromptExecutor.execute = functools.partialmethod(prompt_executor_execute, __original_function=execution.PromptExecutor.execute)
+
+
+def prompt_executor_execute(self, *args, __original_function, **kwargs):
+    res = __original_function(self, *args, **kwargs)
+    delete_intermediates(self)
+    return res
+
+
+def delete_intermediates(prompt_executor: execution.PromptExecutor):
+    for k, v in prompt_executor.outputs.copy().items():
+        for v in v:
+            for v in v:
+                if v in intermediates_to_delete and k in prompt_executor.outputs:
+                    prompt_executor.outputs.pop(k)
+                    intermediates_to_delete.remove(v)
+
+    del k, v
+    gc.collect()
+    model_management.soft_empty_cache()
+    model_management.cleanup_models()
+
+
+patch_prompt_executor()
 
 
 class MechaMerger:
@@ -49,6 +86,9 @@ class MechaMerger:
                     "max": 16,
                     "step": 1,
                 }),
+                "temporary_merge": (["True", "False"], {
+                    "default": "False",
+                })
             },
         }
     RETURN_TYPES = ("MODEL", "CLIP")
@@ -66,7 +106,10 @@ class MechaMerger:
         default_merge_dtype: str,
         total_buffer_size: int,
         threads: int,
+        temporary_merge: str,
     ):
+        model_management.unload_all_models()
+        temporary_merge = temporary_merge == "True"
         model_arch = getattr(recipe.model_arch, "identifier", None)
         if fallback_model == "none" or not model_arch:
             fallback_model = None
@@ -90,7 +133,10 @@ class MechaMerger:
             threads=threads if threads > 0 else None,
             total_buffer_size=total_buffer_size,
         )
-        return load_checkpoint_guess_config(state_dict)
+        res = load_checkpoint_guess_config(state_dict)
+        if temporary_merge:
+            intermediates_to_delete.extend(res)
+        return res
 
 
 class ComfyTqdm:
@@ -152,7 +198,7 @@ def load_checkpoint_guess_config(state_dict):
         current_device=inital_load_device,
     )
     if inital_load_device != torch.device("cpu"):
-        print("loaded straight to GPU")
+        logging.info("loaded straight to GPU")
         model_management.load_model_gpu(model_patcher)
 
     return model_patcher, clip
