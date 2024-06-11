@@ -1,0 +1,15 @@
+[project]
+name = "comfy-mecha"
+description = "model merging nodes powered by sd-mecha, a memory efficient state dict recipe merger"
+version = "1.0.0"
+license = "LICENSE"
+dependencies = ["sd-mecha>=0.0.14"]
+
+[project.urls]
+Repository = "https://github.com/ljleb/comfy-mecha"
+#  Used by Comfy Registry https://comfyregistry.org
+
+[tool.comfy]
+PublisherId = "ljleb"
+DisplayName = "mecha"
+Icon = ""
