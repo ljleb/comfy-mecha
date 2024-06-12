@@ -216,19 +216,23 @@ def load_checkpoint_guess_config(state_dict):
     model = model_config.get_model(state_dict, "model.diffusion_model.", device=inital_load_device)
     model.load_model_weights(state_dict, "model.diffusion_model.")
 
-    clip_target = model_config.clip_target()
+    clip_target = model_config.clip_target(state_dict=state_dict)
     if clip_target is not None:
         clip_sd = model_config.process_clip_state_dict(state_dict)
         if len(clip_sd) > 0:
-            clip = CLIP(clip_target)
+            clip = CLIP(clip_target, embedding_directory=folder_paths.get_folder_paths("embeddings"))
             m, u = clip.load_sd(clip_sd, full_model=True)
             if len(m) > 0:
-                print("clip missing:", m)
+                m_filter = list(filter(lambda a: ".logit_scale" not in a and ".transformer.text_projection.weight" not in a, m))
+                if len(m_filter) > 0:
+                    logging.warning("clip missing: {}".format(m))
+                else:
+                    logging.debug("clip missing: {}".format(m))
 
             if len(u) > 0:
-                print("clip unexpected:", u)
+                logging.debug("clip unexpected {}:".format(u))
         else:
-            print("no CLIP/text encoder weights in checkpoint, the text encoder model will not be loaded.")
+            logging.warning("no CLIP/text encoder weights in checkpoint, the text encoder model will not be loaded.")
 
     # skip vae
     left_over = [k for k in state_dict.keys() if not k.startswith("first_stage_model.")]
