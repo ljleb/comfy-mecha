@@ -263,6 +263,7 @@ class MechaModelRecipe:
             },
         }
     RETURN_TYPES = ("MECHA_RECIPE",)
+    RETURN_NAMES = ("recipe",)
     FUNCTION = "execute"
     OUTPUT_NODE = False
     CATEGORY = "advanced/model_merging/mecha"
@@ -343,6 +344,7 @@ class MechaRecipeList:
             }
         }
     RETURN_TYPES = ("MECHA_RECIPE_LIST",)
+    RETURN_NAMES = ("recipes",)
     FUNCTION = "execute"
     OUTPUT_NODE = False
     CATEGORY = "advanced/model_merging/mecha"

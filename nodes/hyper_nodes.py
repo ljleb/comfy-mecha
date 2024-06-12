@@ -16,7 +16,7 @@ class BlocksMechaHyper:
                     "step": 0.1,
                 }),
                 "model_arch": (sd_mecha.extensions.model_arch.get_all(),),
-                "model_component": (["unet", "txt", "txt2"], {
+                "model_component": (["unet", "txt", "txt2", "t5xxl"], {
                     "default": "unet",
                 }),
                 "validate_num_blocks": ("BOOLEAN", {
@@ -25,6 +25,7 @@ class BlocksMechaHyper:
             },
         }
     RETURN_TYPES = ("MECHA_HYPER",)
+    RETURN_NAMES = ("hyper",)
     FUNCTION = "execute"
     OUTPUT_NODE = False
     CATEGORY = "advanced/model_merging/mecha"
@@ -65,6 +66,7 @@ class FloatMechaHyper:
             },
         }
     RETURN_TYPES = ("MECHA_HYPER",)
+    RETURN_NAMES = ("hyper",)
     FUNCTION = "execute"
     OUTPUT_NODE = False
     CATEGORY = "advanced/model_merging/mecha"
