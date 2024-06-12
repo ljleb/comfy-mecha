@@ -1,7 +1,7 @@
 # sd-mecha for Comfyui
 
 comfy-mecha is a complete model merging node pack for ComfyUI with a focus on low memory footprint.  
-- compose complex *recipes* without needing to save dozens of intermediate merges to disk
+- compose complex recipes without needing to save dozens of intermediate merges to disk
 - merge loras to models
 - support for block weights
 - and a bunch of other stuff. For more info, see the readme of the underlying library [sd-mecha](https://github.com/ljleb/sd-mecha)
