@@ -3,7 +3,7 @@ import gc
 import logging
 import re
 import textwrap
-from typing import TypeVar, Optional
+from typing import TypeVar, Optional, List
 
 import sd_mecha
 import torch.cuda
@@ -61,20 +61,21 @@ patch_prompt_executor()
 class MechaMerger:
     @classmethod
     def INPUT_TYPES(cls):
-        all_cuda_devices = ["cpu", *(["cuda", *[f"cuda:{i}" for i in range(torch.cuda.device_count())]] if torch.cuda.is_available() else [])]
+        all_torch_devices = get_all_torch_devices()
+        main_torch_device = model_management.get_torch_device().type
         return {
             "required": {
                 "recipe": ("MECHA_RECIPE",),
                 "fallback_model": (["none"] + [f for f in folder_paths.get_filename_list("checkpoints") if f.endswith(".safetensors")], {
                     "default": "none",
                 }),
-                "default_merge_device": (all_cuda_devices, {
-                    "default": "cuda" if torch.cuda.is_available() else "cpu",
+                "default_merge_device": (all_torch_devices, {
+                    "default": main_torch_device,
                 }),
                 "default_merge_dtype": (list(DTYPE_MAPPING.keys()), {
                     "default": "fp64",
                 }),
-                "output_device": (all_cuda_devices, {
+                "output_device": (all_torch_devices, {
                     "default": "cpu",
                 }),
                 "output_dtype": (list(DTYPE_MAPPING.keys()), {
@@ -274,8 +275,6 @@ class ModelMechaRecipe:
 def register_merge_methods():
     for method_name in sd_mecha.extensions.merge_method._merge_methods_registry:
         method = sd_mecha.extensions.merge_method.resolve(method_name)
-        if method.get_model_varargs_name() is not None:
-            continue
 
         class_name = f"{snake_case_to_upper(method_name)}MechaRecipe"
         short_title_name = snake_case_to_title(method_name)
@@ -293,11 +292,11 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
                     for model_name, merge_space in zip(method.get_model_names(), method.get_input_merge_spaces()[0])
                 },
                 **{
-                    hyper_name: ("HYPER",)
+                    hyper_name: ("MECHA_HYPER",)
                     for hyper_name in method.get_hyper_names() - method.get_volatile_hyper_names()
                     if hyper_name not in method.get_default_hypers()
                 },
-                "device": (["default", "cpu", *(["cuda", *[f"cuda:{i}" for i in range(torch.cuda.device_count())]] if torch.cuda.is_available() else [])], {
+                "device": (["default", *get_all_torch_devices()], {
                     "default": "default",
                 }),
                 "dtype": (list(OPTIONAL_DTYPE_MAPPING.keys()), {
@@ -305,8 +304,11 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
                 }),
             },
             "optional": {
+                **({
+                    method.get_model_varargs_name(): ("MECHA_RECIPE_LIST", {"default": []}),
+                } if method.get_model_varargs_name() is not None else {}),
                 **{
-                    hyper_name: ("HYPER", {"default": method.get_default_hypers()[hyper_name]})
+                    hyper_name: ("MECHA_HYPER", {"default": method.get_default_hypers()[hyper_name]})
                     for hyper_name in method.get_hyper_names() - method.get_volatile_hyper_names()
                     if hyper_name in method.get_default_hypers()
                 },
@@ -321,6 +323,43 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
     })
 
 
+MAX_VARARGS_MODELS = 64  # arbitrary limit to n-models methods (open an issue if this is a problem)
+
+
+class ModelMechaRecipeList:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "count": ("INT", {"default": 3, "min": 0, "max": MAX_VARARGS_MODELS, "step": 1})
+            },
+            "optional": {
+                f"recipe_{i}": ("MECHA_RECIPE",)
+                for i in range(MAX_VARARGS_MODELS)
+            }
+        }
+    RETURN_TYPES = ("MECHA_RECIPE_LIST",)
+    FUNCTION = "execute"
+    OUTPUT_NODE = False
+    CATEGORY = "advanced/model_merging/mecha"
+
+    def execute(
+        self,
+        count: int,
+        **kwargs,
+    ):
+        return [kwargs[f"recipe_{i}"] for i in range(count)],
+
+
+def get_all_torch_devices() -> List[str]:
+    torch_device = model_management.get_torch_device().type
+    return [
+        "cpu",
+        *([torch_device] if torch_device != "cpu" else []),
+        *([f"cuda:{i}" for i in range(torch.cuda.device_count())] if torch.cuda.is_available() else []),
+    ]
+
+
 def get_method_node_execute(method: MergeMethod):
     def execute(*_args, **kwargs):
         dtype = OPTIONAL_DTYPE_MAPPING[kwargs["dtype"]]
@@ -329,6 +368,9 @@ def get_method_node_execute(method: MergeMethod):
             device = None
 
         models = [kwargs[m] for m in method.get_model_names()]
+        if method.get_model_varargs_name() is not None:
+            models.extend(kwargs[method.get_model_varargs_name()])
+
         hypers = {
             k: kwargs[k]
             for k in method.get_hyper_names()
@@ -469,12 +511,14 @@ OPTIONAL_DTYPE_MAPPING = {
 NODE_CLASS_MAPPINGS = {
     "Mecha Merger": MechaMerger,
     "Model Mecha Recipe": ModelMechaRecipe,
+    "Model Mecha Recipe List": ModelMechaRecipeList,
     "Custom Code Mecha Recipe": CustomCodeMechaRecipe,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Mecha Merger": "Merger",
     "Model Mecha Recipe": "Model",
+    "Model Mecha Recipe List": "Model List",
     "Custom Code Mecha Recipe": "Custom Code",
 }
 

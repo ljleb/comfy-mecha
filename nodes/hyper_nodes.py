@@ -24,7 +24,7 @@ class BlocksMechaHyper:
                 }),
             },
         }
-    RETURN_TYPES = ("HYPER",)
+    RETURN_TYPES = ("MECHA_HYPER",)
     FUNCTION = "execute"
     OUTPUT_NODE = False
     CATEGORY = "advanced/model_merging/mecha"
@@ -64,7 +64,7 @@ class FloatMechaHyper:
                 }),
             },
         }
-    RETURN_TYPES = ("HYPER",)
+    RETURN_TYPES = ("MECHA_HYPER",)
     FUNCTION = "execute"
     OUTPUT_NODE = False
     CATEGORY = "advanced/model_merging/mecha"
