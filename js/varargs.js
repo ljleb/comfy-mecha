@@ -34,7 +34,7 @@ function handleMechaModelListVisibilityByCount(node, widget) {
 }
 
 const nodeWidgetHandlers = {
-    "Model Mecha Recipe List": {
+    "Mecha Recipe List": {
         "count": handleMechaModelListVisibilityByCount
     },
 };

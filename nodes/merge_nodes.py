@@ -248,7 +248,7 @@ def load_checkpoint_guess_config(state_dict):
     return model_patcher, clip
 
 
-class ModelMechaRecipe:
+class MechaModelRecipe:
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -326,12 +326,12 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
 MAX_VARARGS_MODELS = 64  # arbitrary limit to n-models methods (open an issue if this is a problem)
 
 
-class ModelMechaRecipeList:
+class MechaRecipeList:
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "count": ("INT", {"default": 3, "min": 0, "max": MAX_VARARGS_MODELS, "step": 1})
+                "count": ("INT", {"default": 2, "min": 0, "max": MAX_VARARGS_MODELS, "step": 1})
             },
             "optional": {
                 f"recipe_{i}": ("MECHA_RECIPE",)
@@ -402,7 +402,7 @@ def snake_case_to_title(name: str):
     return name[:1].upper() + name[1:]
 
 
-class CustomCodeMechaRecipe:
+class MechaCustomCodeRecipe:
     @classmethod
     def INPUT_TYPES(cls):
         all_cuda_devices = ["cpu", *(["cuda", *[f"cuda:{i}" for i in range(torch.cuda.device_count())]] if torch.cuda.is_available() else [])]
@@ -510,16 +510,16 @@ OPTIONAL_DTYPE_MAPPING = {
 
 NODE_CLASS_MAPPINGS = {
     "Mecha Merger": MechaMerger,
-    "Model Mecha Recipe": ModelMechaRecipe,
-    "Model Mecha Recipe List": ModelMechaRecipeList,
-    "Custom Code Mecha Recipe": CustomCodeMechaRecipe,
+    "Model Mecha Recipe": MechaModelRecipe,
+    "Mecha Recipe List": MechaRecipeList,
+    "Mecha Custom Code Recipe": MechaCustomCodeRecipe,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Mecha Merger": "Merger",
-    "Model Mecha Recipe": "Model",
-    "Model Mecha Recipe List": "Model List",
-    "Custom Code Mecha Recipe": "Custom Code",
+    "Mecha Model Recipe": "Model",
+    "Mecha Recipe List": "Recipe List",
+    "Mecha Custom Code Recipe": "Custom Code",
 }
 
 register_merge_methods()
