@@ -4,7 +4,7 @@ comfy-mecha is a complete model merging node pack for ComfyUI with a focus on lo
 - compose complex recipes without needing to save dozens of intermediate merges to disk
 - merge loras to models
 - support for block weights
-- and a bunch of other stuff. For more info, see the nodes listing below. See also the readme of the underlying library [sd-mecha](https://github.com/ljleb/sd-mecha)
+- and a bunch of other stuff. For more info, see the [nodes listing](#nodes-listing) below. See also the readme of the underlying library [sd-mecha](https://github.com/ljleb/sd-mecha)
 
 ## Workflows
 
@@ -23,7 +23,7 @@ comfy-mecha is a complete model merging node pack for ComfyUI with a focus on lo
 Recipe workflows can get much, much more complex than this.  
 If you are familiar with writing python code, you might be interested in using the sd-mecha library directly for experiments instead of ComfyUI: https://github.com/ljleb/sd-mecha
 
-## Node listing
+## Nodes listing
 
 ### Merge nodes
 
