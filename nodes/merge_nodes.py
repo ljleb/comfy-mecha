@@ -1,6 +1,7 @@
 import functools
 import gc
 import logging
+import pathlib
 import re
 import textwrap
 from typing import TypeVar, Optional, List
@@ -272,6 +273,12 @@ class MechaModelRecipe:
         model_path: str,
         model_arch: str,
     ):
+        for path in folder_paths.get_folder_paths("checkpoints"):
+            model_path_candidate = pathlib.Path(path, model_path)
+            if model_path_candidate.exists():
+                model_path = model_path_candidate
+                break
+
         return sd_mecha.model(model_path, model_arch=model_arch),
 
 
@@ -295,6 +302,12 @@ class MechaLoraRecipe:
         model_path: str,
         model_arch: str,
     ):
+        for path in folder_paths.get_folder_paths("loras"):
+            model_path_candidate = pathlib.Path(path, model_path)
+            if model_path_candidate.exists():
+                model_path = model_path_candidate
+                break
+
         return sd_mecha.lora(model_path, model_arch=model_arch),
 
 
