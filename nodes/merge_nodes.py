@@ -259,7 +259,6 @@ class MechaModelRecipe:
             "required": {
                 "model_path": ([f for f in folder_paths.get_filename_list("checkpoints") if f.endswith(".safetensors")],),
                 "model_arch": (sd_mecha.extensions.model_arch.get_all(),),
-                "model_type": (["base", "lora"], {"default": "base"}),
             },
         }
     RETURN_TYPES = ("MECHA_RECIPE",)
@@ -272,9 +271,31 @@ class MechaModelRecipe:
         self,
         model_path: str,
         model_arch: str,
-        model_type: str,
     ):
-        return sd_mecha.model(model_path, model_arch=model_arch, model_type=model_type),
+        return sd_mecha.model(model_path, model_arch=model_arch),
+
+
+class MechaLoraRecipe:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "model_path": ([f for f in folder_paths.get_filename_list("loras") if f.endswith(".safetensors")],),
+                "model_arch": (sd_mecha.extensions.model_arch.get_all(),),
+            },
+        }
+    RETURN_TYPES = ("MECHA_RECIPE",)
+    RETURN_NAMES = ("recipe",)
+    FUNCTION = "execute"
+    OUTPUT_NODE = False
+    CATEGORY = "advanced/model_merging/mecha"
+
+    def execute(
+        self,
+        model_path: str,
+        model_arch: str,
+    ):
+        return sd_mecha.lora(model_path, model_arch=model_arch),
 
 
 def register_merge_methods():
@@ -517,6 +538,7 @@ OPTIONAL_DTYPE_MAPPING = {
 NODE_CLASS_MAPPINGS = {
     "Mecha Merger": MechaMerger,
     "Model Mecha Recipe": MechaModelRecipe,
+    "Lora Mecha Recipe": MechaLoraRecipe,
     "Mecha Recipe List": MechaRecipeList,
     "Mecha Custom Code Recipe": MechaCustomCodeRecipe,
 }
@@ -524,6 +546,7 @@ NODE_CLASS_MAPPINGS = {
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Mecha Merger": "Merger",
     "Mecha Model Recipe": "Model",
+    "Lora Mecha Recipe": "Lora",
     "Mecha Recipe List": "Recipe List",
     "Mecha Custom Code Recipe": "Custom Code",
 }
