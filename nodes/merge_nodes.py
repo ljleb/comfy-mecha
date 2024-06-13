@@ -126,7 +126,7 @@ class MechaMerger:
             fallback_model = sd_mecha.model(fallback_model, model_arch=model_arch)
 
         merger = sd_mecha.RecipeMerger(
-            models_dir=folder_paths.get_folder_paths("checkpoints"),
+            models_dir=folder_paths.get_folder_paths("checkpoints") + folder_paths.get_folder_paths("loras"),
             default_device=default_merge_device,
             default_dtype=DTYPE_MAPPING[default_merge_dtype],
             tqdm=ComfyTqdm,
