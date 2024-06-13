@@ -6,6 +6,28 @@ comfy-mecha is a complete model merging node pack for ComfyUI with a focus on lo
 - support for block weights
 - and a bunch of other stuff. For more info, see the [nodes listing](#nodes-listing) below. See also the readme of the underlying library [sd-mecha](https://github.com/ljleb/sd-mecha)
 
+## Install
+
+### Install with ComfyUI-Manager
+
+Assuming you have [ComfyUI-Manager](https://github.com/ltdrdata/ComfyUI-Manager) installed:
+
+1. Open a browser tab on ComfyUI
+2. Click on the "Manager" button
+3. Click on "Install Custom Nodes"
+4. Search for "mecha"
+5. Install "Mecha Merge Node Pack"
+
+### Install manually
+
+You can also install the node pack manually:
+
+```sh
+cd custom_nodes
+git clone https://github.com/ljleb/comfy-mecha.git
+pip install -r comfy-mecha/requirements.txt
+```
+
 ## Workflows
 
 ### Basic weighted sum
