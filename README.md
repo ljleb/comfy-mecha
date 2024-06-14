@@ -1,3 +1,5 @@
+[![Discord Server](https://dcbadge.vercel.app/api/server/2EPaw6fxxm)](https://discord.gg/invite/2EPaw6fxxm)
+
 # sd-mecha for Comfyui
 
 comfy-mecha is a complete model merging node pack for ComfyUI with a focus on low memory footprint.  
@@ -21,7 +23,29 @@ comfy-mecha is a complete model merging node pack for ComfyUI with a focus on lo
 ![resources/ties_merging.png](resources/ties_merging.png)
 
 Recipe workflows can get much, much more complex than this.  
-If you are familiar with writing python code, you might be interested in using the sd-mecha library directly for experiments instead of ComfyUI: https://github.com/ljleb/sd-mecha
+If you are familiar with writing python code, you might be interested in using the sd-mecha library directly for experiments as an alternative to ComfyUI: https://github.com/ljleb/sd-mecha
+
+## Install
+
+### Install with ComfyUI-Manager
+
+Assuming you have [ComfyUI-Manager](https://github.com/ltdrdata/ComfyUI-Manager) installed:
+
+1. Open a browser tab on ComfyUI
+2. Click on the "Manager" button
+3. Click on "Install Custom Nodes"
+4. Search for "mecha"
+5. Install "Mecha Merge Node Pack"
+
+### Install manually
+
+You can also install the node pack manually:
+
+```sh
+cd custom_nodes
+git clone https://github.com/ljleb/comfy-mecha.git
+pip install -r comfy-mecha/requirements.txt
+```
 
 ## Nodes listing
 
