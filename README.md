@@ -21,7 +21,7 @@ comfy-mecha is a complete model merging node pack for ComfyUI with a focus on lo
 ![resources/ties_merging.png](resources/ties_merging.png)
 
 Recipe workflows can get much, much more complex than this.  
-If you are familiar with writing python code, you might be interested in using the sd-mecha library directly for experiments instead of ComfyUI: https://github.com/ljleb/sd-mecha
+If you are familiar with writing python code, you might be interested in using the sd-mecha library directly for experiments as an alternative to ComfyUI: https://github.com/ljleb/sd-mecha
 
 ## Install
 
