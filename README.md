@@ -1,3 +1,5 @@
+[![Discord Server](https://dcbadge.vercel.app/api/server/2EPaw6fxxm)](https://discord.gg/invite/2EPaw6fxxm)
+
 # sd-mecha for Comfyui
 
 comfy-mecha is a complete model merging node pack for ComfyUI with a focus on low memory footprint.  
