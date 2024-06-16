@@ -91,8 +91,8 @@ class MechaMerger:
                     "max": 16,
                     "step": 1,
                 }),
-                "temporary_merge": (["True", "False"], {
-                    "default": "True",
+                "temporary_merge": ("BOOLEAN", {
+                    "default": True,
                 })
             },
         }
@@ -111,10 +111,10 @@ class MechaMerger:
         default_merge_dtype: str,
         total_buffer_size: str,
         threads: int,
-        temporary_merge: str,
+        temporary_merge: bool | str,
     ):
         global cached_merges_to_delete, prompt_executor
-        temporary_merge = temporary_merge == "True"
+        temporary_merge = temporary_merge is True or temporary_merge == "True"
         total_buffer_size = memory_to_bytes(total_buffer_size)
 
         model_management.unload_all_models()
@@ -331,7 +331,7 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
                     for model_name, merge_space in zip(method.get_model_names(), method.get_input_merge_spaces()[0])
                 },
                 **{
-                    hyper_name: ("MECHA_HYPER",)
+                    hyper_name: ("MECHA_HYPER,FLOAT,INT",)
                     for hyper_name in method.get_hyper_names() - method.get_volatile_hyper_names()
                     if hyper_name not in method.get_default_hypers()
                 },
@@ -347,7 +347,7 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
                     method.get_model_varargs_name(): ("MECHA_RECIPE_LIST", {"default": []}),
                 } if method.get_model_varargs_name() is not None else {}),
                 **{
-                    hyper_name: ("MECHA_HYPER", {"default": method.get_default_hypers()[hyper_name]})
+                    hyper_name: ("MECHA_HYPER,FLOAT,INT", {"default": method.get_default_hypers()[hyper_name]})
                     for hyper_name in method.get_hyper_names() - method.get_volatile_hyper_names()
                     if hyper_name in method.get_default_hypers()
                 },

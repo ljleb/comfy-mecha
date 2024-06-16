@@ -6,8 +6,14 @@ class BlocksMechaHyper:
     def INPUT_TYPES(cls):
         return {
             "required": {
+                "preset": (["custom"], {
+                    "default": "custom",
+                }),
                 "blocks": ("STRING", {
                     "default": "",
+                }),
+                "validate_num_blocks": ("BOOLEAN", {
+                    "default": True,
                 }),
                 "default": ("FLOAT", {
                     "default": 0.0,
@@ -19,9 +25,6 @@ class BlocksMechaHyper:
                 "model_component": (["unet", "txt", "txt2", "t5xxl"], {
                     "default": "unet",
                 }),
-                "validate_num_blocks": ("BOOLEAN", {
-                    "default": True,
-                }),
             },
         }
     RETURN_TYPES = ("MECHA_HYPER",)
@@ -32,12 +35,18 @@ class BlocksMechaHyper:
 
     def execute(
         self,
+        preset: str,
         blocks: str,
+        validate_num_blocks: bool,
         default: float,
         model_arch: str,
         model_component: str,
-        validate_num_blocks: bool,
     ):
+        if preset != "custom":
+            blocks = ""
+            validate_num_blocks = True
+            default = 0.0
+
         try:
             return sd_mecha.default(
                 model_arch=model_arch,
