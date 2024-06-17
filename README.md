@@ -69,8 +69,9 @@ Nodes used to specify hyper(parameters) to merge methods. For example, `Weighted
 
 ### Extensions
 
-To add custom merge nodes, you can add python scripts that make use of the mecha extension API under the `mecha_extensions` directory.  
-The node pack will run all scripts placed there before creating the comfy nodes.  
+To add custom merge nodes, you can add python scripts that make use of the mecha extension API under the `mecha_extensions` directory.
+The node pack will run all scripts placed there before creating the comfy nodes.
+
 Currently, the documentation for the mecha extension API is under construction.
 For now, to get more information, you can either take a look at the [custom merge method example](https://github.com/ljleb/sd-mecha/blob/main/examples/custom_merge_method.py),
 open a discussion post to ask questions, or [join the discord server](https://discord.gg/invite/2EPaw6fxxm).
