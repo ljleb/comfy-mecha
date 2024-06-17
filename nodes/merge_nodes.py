@@ -4,7 +4,7 @@ import logging
 import pathlib
 import re
 import textwrap
-from typing import TypeVar, Optional, List
+from typing import TypeVar, Optional, List, Tuple, Any, Iterable
 
 import sd_mecha
 import torch.cuda
@@ -20,7 +20,8 @@ from comfy.sd import CLIP
 import execution
 
 
-cached_merges_to_delete = list()
+temporary_merged_recipes: List[Tuple[str, Iterable[Any]]] = []
+workflow_has_cached_merges: bool = False
 prompt_executor: Optional[execution.PromptExecutor] = None
 
 
@@ -32,25 +33,29 @@ def patch_prompt_executor():
 
 
 def prompt_executor_execute(self, *args, __original_function, **kwargs):
-    global prompt_executor
+    global workflow_has_cached_merges, prompt_executor
     prompt_executor = self
-    free_cached_merges(self)
-    return __original_function(self, *args, **kwargs)
+    workflow_has_cached_merges = False
+    res = __original_function(self, *args, **kwargs)
+    if workflow_has_cached_merges:
+        free_temporary_merges(self)
+    return res
 
 
-def free_cached_merges(prompt_executor: execution.PromptExecutor):
-    global cached_merges_to_delete
-    if not cached_merges_to_delete:
+def free_temporary_merges(prompt_executor: execution.PromptExecutor):
+    global temporary_merged_recipes
+    if not temporary_merged_recipes:
         return
 
+    temporary_merged_objects = [e for t in temporary_merged_recipes for e in t[1]]
     for k, v in prompt_executor.outputs.copy().items():
         for v in v:
             for v in v:
-                if v in cached_merges_to_delete and k in prompt_executor.outputs:
+                if v in temporary_merged_objects and k in prompt_executor.outputs:
                     prompt_executor.outputs.pop(k)
 
     del k, v
-    cached_merges_to_delete.clear()
+    temporary_merged_recipes.clear()
     model_management.cleanup_models()
     gc.collect()
     model_management.soft_empty_cache()
@@ -100,6 +105,24 @@ class MechaMerger:
     FUNCTION = "execute"
     OUTPUT_NODE = False
     CATEGORY = "advanced/model_merging/mecha"
+    changed_id = 0
+
+    @classmethod
+    def IS_CHANGED(cls, recipe, temporary_merge, **_kwargs):
+        global temporary_merged_recipes, workflow_has_cached_merges
+        cls.changed_id += 1
+        if recipe is not None:  # not the first run, temporary_merged_recipes could have contents
+            recipe_txt = sd_mecha.serialize(recipe)
+            try:
+                already_merged_index = [t[0] for t in temporary_merged_recipes].index(recipe_txt)
+                already_merged_recipe = temporary_merged_recipes[already_merged_index]
+            except ValueError:
+                already_merged_recipe = None
+            if temporary_merged_recipes and already_merged_recipe is None:
+                free_temporary_merges(prompt_executor)
+
+        workflow_has_cached_merges = workflow_has_cached_merges or not temporary_merge
+        return str(cls.changed_id) * int(temporary_merge)
 
     def execute(
         self,
@@ -111,14 +134,21 @@ class MechaMerger:
         default_merge_dtype: str,
         total_buffer_size: str,
         threads: int,
-        temporary_merge: bool | str,
+        temporary_merge: bool,
     ):
-        global cached_merges_to_delete, prompt_executor
-        temporary_merge = temporary_merge is True or temporary_merge == "True"
+        global temporary_merged_recipes, workflow_has_cached_merges, prompt_executor
         total_buffer_size = memory_to_bytes(total_buffer_size)
 
-        model_management.unload_all_models()
-        free_cached_merges(prompt_executor)
+        recipe_txt = sd_mecha.serialize(recipe)
+        try:
+            already_merged_index = [t[0] for t in temporary_merged_recipes].index(recipe_txt)
+            already_merged_recipe = temporary_merged_recipes[already_merged_index]
+        except ValueError:
+            already_merged_recipe = None
+        if already_merged_recipe is not None:
+            return already_merged_recipe[1]
+        if temporary_merged_recipes and already_merged_recipe is None:
+            free_temporary_merges(prompt_executor)
 
         model_arch = getattr(recipe.model_arch, "identifier", None)
         if fallback_model == "none" or not model_arch:
@@ -145,7 +175,7 @@ class MechaMerger:
         )
         res = load_checkpoint_guess_config(state_dict)
         if temporary_merge:
-            cached_merges_to_delete.extend(res)
+            temporary_merged_recipes.append((recipe_txt, res))
         return res
 
 
