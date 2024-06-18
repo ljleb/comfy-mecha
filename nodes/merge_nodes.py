@@ -182,8 +182,6 @@ def memory_to_bytes(memory_str: str) -> int:
                       K - kilobytes
                       M - megabytes
                       G - gigabytes
-                      T - terabytes
-                      P - petabytes
 
     Returns:
     int: The total equivalent memory in bytes, always as an integer.
@@ -407,7 +405,7 @@ class MechaRecipeList:
         count: int,
         **kwargs,
     ):
-        return [kwargs[f"recipe_{i}"] for i in range(count)],
+        return [kwargs[f"recipe_{i}"] for i in range(count) if f"recipe_{i}" in kwargs],
 
 
 def get_all_torch_devices() -> List[str]:
