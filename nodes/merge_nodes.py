@@ -42,7 +42,6 @@ def prompt_executor_execute(self, *args, __original_function, **kwargs):
         return __original_function(self, *args, **kwargs)
     finally:
         if cached_mergers_count > 0 and temporary_mergers_count > 0:
-            print("cache clear!")
             free_temporary_merges(self)
 
 
@@ -56,7 +55,6 @@ def free_temporary_merges(prompt_executor: execution.PromptExecutor):
         for v in v:
             for v in v:
                 if v in temporary_merged_objects and k in prompt_executor.outputs:
-                    print(f"free {k}")
                     prompt_executor.outputs.pop(k)
 
     del k, v
