@@ -3,16 +3,11 @@ import gc
 import logging
 import pathlib
 import re
-import textwrap
-from typing import TypeVar, Optional, List, Tuple, Any, Iterable
-
+from typing import Optional, List, Tuple, Any, Iterable
 import sd_mecha
 import torch.cuda
 import tqdm
-from sd_mecha import Hyper
-from sd_mecha.extensions.merge_method import MergeMethod, convert_to_recipe
-from sd_mecha.merge_methods import SameMergeSpace, LiftFlag, MergeSpace
-from torch import Tensor
+from sd_mecha.extensions.merge_method import MergeMethod
 import folder_paths
 import comfy
 from comfy import model_management, model_detection
@@ -346,6 +341,7 @@ def register_merge_methods():
 
 
 def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
+    all_hyper_names = method.get_hyper_names() - method.get_volatile_hyper_names()
     return type(class_name, (object,), {
         "INPUT_TYPES": lambda: {
             "required": {
@@ -355,7 +351,7 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
                 },
                 **{
                     hyper_name: ("MECHA_HYPER,FLOAT,INT",)
-                    for hyper_name in method.get_hyper_names() - method.get_volatile_hyper_names()
+                    for hyper_name in all_hyper_names
                     if hyper_name not in method.get_default_hypers()
                 },
                 "device": (["default", *get_all_torch_devices()], {
@@ -370,8 +366,8 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
                     method.get_model_varargs_name(): ("MECHA_RECIPE_LIST", {"default": []}),
                 } if method.get_model_varargs_name() is not None else {}),
                 **{
-                    hyper_name: ("MECHA_HYPER,FLOAT,INT", {"default": method.get_default_hypers()[hyper_name]})
-                    for hyper_name in method.get_hyper_names() - method.get_volatile_hyper_names()
+                    f"{hyper_name} ({method.get_default_hypers()[hyper_name]})": ("MECHA_HYPER,FLOAT,INT", {"default": method.get_default_hypers()[hyper_name]})
+                    for hyper_name in all_hyper_names
                     if hyper_name in method.get_default_hypers()
                 },
             },
@@ -430,6 +426,15 @@ def get_method_node_execute(method: MergeMethod):
         if device == "default":
             device = None
 
+        # remove default values from keys
+        # comfy nodes cannot distinguish display names from id names
+        # in consequence we have to unmangle things here
+        for k in list(kwargs):
+            if " (" in k and k.endswith(")"):
+                new_k = k.split(" ")[0]
+                kwargs[new_k] = kwargs[k]
+                del kwargs[k]
+
         models = [kwargs[m] for m in method.get_model_names()]
         if method.get_model_varargs_name() is not None:
             models.extend(kwargs[method.get_model_varargs_name()])
@@ -465,101 +470,6 @@ def snake_case_to_title(name: str):
     return name[:1].upper() + name[1:]
 
 
-class MechaCustomCodeRecipe:
-    @classmethod
-    def INPUT_TYPES(cls):
-        all_cuda_devices = ["cpu", *(["cuda", *[f"cuda:{i}" for i in range(torch.cuda.device_count())]] if torch.cuda.is_available() else [])]
-        return {
-            "required": {
-                "device": (["default", *all_cuda_devices], {
-                    "default": "default",
-                }),
-                "dtype": (list(OPTIONAL_DTYPE_MAPPING.keys()), {
-                    "default": "default",
-                }),
-                "script": ("STRING", {
-                    "default": default_custom_code_method,
-                    "multiline": True,
-                }),
-            },
-            "optional": {
-                **{
-                    k: ("MECHA_RECIPE", {
-                        "default": "none",
-                    })
-                    for k in ["a", "b", "c", "d", "e"]
-                },
-                **{
-                    hyper_name: ("*", {"default": 0.0})
-                    for hyper_name in ["alpha", "beta", "gamma", "omega", "sigma"]
-                },
-            },
-        }
-    RETURN_TYPES = ("MECHA_RECIPE",)
-    RETURN_NAMES = ("recipe",)
-    FUNCTION = "execute"
-    OUTPUT_NODE = False
-    CATEGORY = "advanced/model_merging/mecha"
-
-    def execute(
-        self,
-        script: str,
-        device: str,
-        dtype: str,
-        **kwargs,
-    ):
-        if device == "default":
-            device = None
-
-        script_locals = {}
-        script_globals = {
-            torch.__name__: torch,
-            Tensor.__name__: Tensor,
-            TypeVar.__name__: TypeVar,
-            LiftFlag.__name__: LiftFlag,
-            MergeSpace.__name__: MergeSpace,
-            "Hyper": Hyper,
-        }
-        exec(script, script_globals, script_locals)
-        method: MergeMethod = convert_to_recipe(script_locals["main"], register=False).__wrapped_method__
-        models = [
-            m for k, m in kwargs.items()
-            if k in method.get_model_names() and m != "none"
-        ]
-        hypers = {
-            k: m for k, m in kwargs.items()
-            if k in method.get_hyper_names()
-        }
-        return method.create_recipe(*models, **hypers, device=device, dtype=OPTIONAL_DTYPE_MAPPING[dtype]),
-
-    @classmethod
-    def IS_CHANGED(cls, script: str, **kwargs):
-        return script
-
-
-default_custom_code_method = textwrap.dedent(f"""
-BaseSpace = LiftFlag[{MergeSpace.__name__}.BASE]
-DeltaSpace = LiftFlag[{MergeSpace.__name__}.DELTA]
-SameMergeSpace = {TypeVar.__name__}("SameMergeSpace", bound=LiftFlag[MergeSpace.BASE | MergeSpace.DELTA])
-
-def main(
-    a: {Tensor.__name__} | SameMergeSpace,
-    b: {Tensor.__name__} | SameMergeSpace,
-#    c: {Tensor.__name__} | SameMergeSpace,
-#    d: {Tensor.__name__} | SameMergeSpace,
-#    e: {Tensor.__name__} | SameMergeSpace,
-    *,
-    alpha: Hyper = 0.0,
-    beta: Hyper = 0.0,
-    gamma: Hyper = 0.0,
-    omega: Hyper = 0.0,
-    sigma: Hyper = 0.0,
-    **kwargs,
-) -> {Tensor.__name__} | {SameMergeSpace.__name__}:
-    return (1 - alpha) * a + alpha * b
-""")
-
-
 DTYPE_MAPPING = {
     "bf16": torch.bfloat16,
     "fp16": torch.float16,
@@ -576,7 +486,6 @@ NODE_CLASS_MAPPINGS = {
     "Model Mecha Recipe": MechaModelRecipe,
     "Lora Mecha Recipe": MechaLoraRecipe,
     "Mecha Recipe List": MechaRecipeList,
-    "Mecha Custom Code Recipe": MechaCustomCodeRecipe,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -584,7 +493,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Mecha Model Recipe": "Model",
     "Lora Mecha Recipe": "Lora",
     "Mecha Recipe List": "Recipe List",
-    "Mecha Custom Code Recipe": "Custom Code",
 }
 
 register_merge_methods()
