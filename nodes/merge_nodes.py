@@ -99,7 +99,8 @@ class MechaMerger:
                 })
             },
         }
-    RETURN_TYPES = ("MODEL", "CLIP")
+    RETURN_TYPES = ("MODEL", "CLIP", "STRING")
+    RETURN_NAMES = ("MODEL", "CLIP", "recipe_txt")
     FUNCTION = "execute"
     OUTPUT_NODE = False
     CATEGORY = "advanced/model_merging/mecha"
@@ -145,7 +146,7 @@ class MechaMerger:
             fallback_model = sd_mecha.model(fallback_model, model_arch=model_arch)
 
         merger = sd_mecha.RecipeMerger(
-            models_dir=folder_paths.get_folder_paths("checkpoints"),
+            models_dir=folder_paths.get_folder_paths("checkpoints") + folder_paths.get_folder_paths("loras"),
             default_device=default_merge_device,
             default_dtype=DTYPE_MAPPING[default_merge_dtype],
             tqdm=ComfyTqdm,
@@ -164,7 +165,7 @@ class MechaMerger:
         res = load_checkpoint_guess_config(state_dict)
         if temporary_merge:
             temporary_merged_recipes.append((recipe_txt, res))
-        return res
+        return *res, recipe_txt
 
 
 memory_units = ('B', 'K', 'M', 'G')
@@ -289,12 +290,6 @@ class MechaModelRecipe:
         model_path: str,
         model_arch: str,
     ):
-        for path in folder_paths.get_folder_paths("checkpoints"):
-            model_path_candidate = pathlib.Path(path, model_path)
-            if model_path_candidate.exists():
-                model_path = model_path_candidate
-                break
-
         return sd_mecha.model(model_path, model_arch=model_arch),
 
 
@@ -318,12 +313,6 @@ class MechaLoraRecipe:
         model_path: str,
         model_arch: str,
     ):
-        for path in folder_paths.get_folder_paths("loras"):
-            model_path_candidate = pathlib.Path(path, model_path)
-            if model_path_candidate.exists():
-                model_path = model_path_candidate
-                break
-
         return sd_mecha.lora(model_path, model_arch=model_arch),
 
 
