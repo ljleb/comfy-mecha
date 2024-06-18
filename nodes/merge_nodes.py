@@ -21,7 +21,8 @@ import execution
 
 
 temporary_merged_recipes: List[Tuple[str, Iterable[Any]]] = []
-workflow_has_cached_merges: bool = False
+cached_mergers_count: int = 0
+temporary_mergers_count: int = 0
 prompt_executor: Optional[execution.PromptExecutor] = None
 
 
@@ -33,13 +34,16 @@ def patch_prompt_executor():
 
 
 def prompt_executor_execute(self, *args, __original_function, **kwargs):
-    global workflow_has_cached_merges, prompt_executor
+    global cached_mergers_count, temporary_mergers_count, prompt_executor
     prompt_executor = self
-    workflow_has_cached_merges = False
-    res = __original_function(self, *args, **kwargs)
-    if workflow_has_cached_merges:
-        free_temporary_merges(self)
-    return res
+    cached_mergers_count = 0
+    temporary_mergers_count = 0
+    try:
+        return __original_function(self, *args, **kwargs)
+    finally:
+        if cached_mergers_count > 0 and temporary_mergers_count > 0:
+            print("cache clear!")
+            free_temporary_merges(self)
 
 
 def free_temporary_merges(prompt_executor: execution.PromptExecutor):
@@ -52,6 +56,7 @@ def free_temporary_merges(prompt_executor: execution.PromptExecutor):
         for v in v:
             for v in v:
                 if v in temporary_merged_objects and k in prompt_executor.outputs:
+                    print(f"free {k}")
                     prompt_executor.outputs.pop(k)
 
     del k, v
@@ -108,21 +113,11 @@ class MechaMerger:
     changed_id = 0
 
     @classmethod
-    def IS_CHANGED(cls, recipe, temporary_merge, **_kwargs):
-        global temporary_merged_recipes, workflow_has_cached_merges
-        cls.changed_id += 1
-        if recipe is not None:  # not the first run, temporary_merged_recipes could have contents
-            recipe_txt = sd_mecha.serialize(recipe)
-            try:
-                already_merged_index = [t[0] for t in temporary_merged_recipes].index(recipe_txt)
-                already_merged_recipe = temporary_merged_recipes[already_merged_index]
-            except ValueError:
-                already_merged_recipe = None
-            if temporary_merged_recipes and already_merged_recipe is None:
-                free_temporary_merges(prompt_executor)
-
-        workflow_has_cached_merges = workflow_has_cached_merges or not temporary_merge
-        return str(cls.changed_id) * int(temporary_merge)
+    def IS_CHANGED(cls, temporary_merge, **_kwargs):
+        global cached_mergers_count, temporary_mergers_count
+        cached_mergers_count += int(not temporary_merge)
+        temporary_mergers_count += int(temporary_merge)
+        return ""
 
     def execute(
         self,
@@ -136,7 +131,7 @@ class MechaMerger:
         threads: int,
         temporary_merge: bool,
     ):
-        global temporary_merged_recipes, workflow_has_cached_merges, prompt_executor
+        global temporary_merged_recipes, prompt_executor
         total_buffer_size = memory_to_bytes(total_buffer_size)
 
         recipe_txt = sd_mecha.serialize(recipe)
