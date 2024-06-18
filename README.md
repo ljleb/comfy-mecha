@@ -67,7 +67,7 @@ Nodes used to specify hyper(parameters) to merge methods. For example, `Weighted
 - `Float Mecha Hyper` specifies the same float for all blocks of the models to be merged
 
 
-### Extensions
+## Extensions
 
 To add custom merge nodes, you can add python scripts that make use of the mecha extension API under the `mecha_extensions` directory.
 The node pack will run all scripts placed there before creating the comfy nodes.
