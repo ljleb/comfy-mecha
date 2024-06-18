@@ -1,7 +1,6 @@
 // original src: https://github.com/jags111/efficiency-nodes-comfyui
 import { app } from "../../scripts/app.js";
 
-let origVarargsInputs = null;
 let origBlocksWidgets = null;
 
 const MAX_VARARGS_MODELS = 64;  // arbitrary limit to n-models methods (open an issue if this is a problem)
@@ -11,39 +10,39 @@ const findWidgetIndexByName = (widgets, name) => {
 };
 
 function handleMechaModelListVisibility(node, visibleCount) {
-    if (origVarargsInputs === null) {
-        origVarargsInputs = node.inputs;
+    if (node.origInputs === undefined) {
+        node.origInputs = node.inputs;
     }
 
     for (let i = 0; i < node.inputs.length; ++i) {
         const input = node.inputs[i];
-        const origInput = origVarargsInputs[i];
+        const origInput = node.origInputs[i];
 
         for (const key of Object.keys(input)) {
             origInput[key] = input[key];
         }
     }
 
-    node.inputs = Array.from(origVarargsInputs);
+    node.inputs = Array.from(node.origInputs);
     node.inputs.length = visibleCount;
     const newHeight = node.computeSize()[1];
     node.setSize([node.size[0], newHeight]);
 }
 
 function handleMechaHyperBlocksListVisibility(node, preset) {
-    if (origBlocksWidgets == null) {
-        origBlocksWidgets = node.widgets;
+    if (node.origWidgets === undefined) {
+        node.origWidgets = node.widgets;
     }
 
     for (let i = 0; i < node.widgets.length; ++i) {
         const widget = node.widgets[i];
-        origBlocksWidgets[findWidgetIndexByName(origBlocksWidgets, widget.name)] = widget;
+        node.origWidgets[findWidgetIndexByName(node.origWidgets, widget.name)] = widget;
     }
 
     if (preset === "custom") {
-        node.widgets = Array.from(origBlocksWidgets);
+        node.widgets = Array.from(node.origWidgets);
     } else {
-        node.widgets = Array.from(origBlocksWidgets);
+        node.widgets = Array.from(node.origWidgets);
 
         const blocksWidgetIndex = findWidgetIndexByName(node.widgets, "blocks");
         node.widgets.splice(blocksWidgetIndex, 1);
