@@ -55,9 +55,11 @@ Nodes used for merging. They all have `Recipe` in their name except for `Mecha M
 
 - nodes ending in `... Mecha Recipe` return a merge recipe
 - `Mecha Merger` takes a `MECHA_RECIPE` as input, and returns a unet and a text encoder
-- `Mecha Model Recipe` loads a model as a recipe to be used as input to other recipe nodes. model architecture detection is not yet supported, so please make sure the right `arch` parameter is selected!
+- `Serializer` takes a `MECHA_RECIPE` as input, and returns the recipe instructions using the mecha format
+- `Deserializer` takes a mecha recipe string as input, and returns the deserialized `MECHA_RECIPE` (this is the inverse operation of `Serializer`)
+- `Mecha Model Recipe` loads a model as a recipe to be used as input to other recipe nodes. model architecture auto-detection is not yet supported, so please make sure the right `model_arch` parameter is selected!
+- `Mecha Lora Recipe` loads a lora model as a recipe to be used as input to other recipe nodes. again, model architecture auto-detection is not yet supported, so make sure to use the right `model_arch`
 - `Mecha Recipe List` takes an arbitrary number of recipes and returns a `MECHA_RECIPE_LIST`. It is intended to be used as input to recipe nodes that accept an arbitrary number of recipes as input, i.e. the `bounds` input of `Clip Mecha Recipe`
-- `Mecha Custom Code Recipe` is a very experimental node for custom code and might be removed eventually. It is hard to create recipes and debug with it. I'd advise against using it and instead registering a custom merge method using the sd-mecha library directly
 
 ### Hyper nodes
 
@@ -65,7 +67,6 @@ Nodes used to specify hyper(parameters) to merge methods. For example, `Weighted
 
 - `Blocks Mecha Hyper` can specify a different hyper for each block of the models to be merged (AKA "merge block weighted" or "MBW")
 - `Float Mecha Hyper` specifies the same float for all blocks of the models to be merged
-
 
 ## Extensions
 

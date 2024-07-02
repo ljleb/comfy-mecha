@@ -1,7 +1,6 @@
 import functools
 import gc
 import logging
-import pathlib
 import re
 from typing import Optional, List, Tuple, Any, Iterable
 import sd_mecha
@@ -62,6 +61,47 @@ def free_temporary_merges(prompt_executor: execution.PromptExecutor):
 patch_prompt_executor()
 
 
+class MechaSerializer:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "recipe": ("MECHA_RECIPE",),
+            },
+        }
+
+    RETURN_TYPES = "STRING",
+    RETURN_NAMES = "recipe_txt",
+    FUNCTION = "execute"
+    OUTPUT_NODE = False
+    CATEGORY = "advanced/model_merging/mecha"
+
+    def execute(self, recipe):
+        return sd_mecha.serialize(recipe),
+
+
+class MechaDeserializer:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "recipe_txt": ("STRING", {
+                    "default": "",
+                    "forceInput": True,
+                }),
+            },
+        }
+
+    RETURN_TYPES = "MECHA_RECIPE",
+    RETURN_NAMES = "recipe",
+    FUNCTION = "execute"
+    OUTPUT_NODE = False
+    CATEGORY = "advanced/model_merging/mecha"
+
+    def execute(self, recipe_txt):
+        return sd_mecha.deserialize(recipe_txt.split("\n")),
+
+
 class MechaMerger:
     @classmethod
     def INPUT_TYPES(cls):
@@ -104,7 +144,6 @@ class MechaMerger:
     FUNCTION = "execute"
     OUTPUT_NODE = False
     CATEGORY = "advanced/model_merging/mecha"
-    changed_id = 0
 
     @classmethod
     def IS_CHANGED(cls, temporary_merge, **_kwargs):
@@ -470,6 +509,8 @@ OPTIONAL_DTYPE_MAPPING = {
 
 NODE_CLASS_MAPPINGS = {
     "Mecha Merger": MechaMerger,
+    "Mecha Serializer": MechaSerializer,
+    "Mecha Deserializer": MechaDeserializer,
     "Model Mecha Recipe": MechaModelRecipe,
     "Lora Mecha Recipe": MechaLoraRecipe,
     "Mecha Recipe List": MechaRecipeList,
@@ -477,6 +518,8 @@ NODE_CLASS_MAPPINGS = {
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Mecha Merger": "Merger",
+    "Mecha Serializer": "Serializer",
+    "Mecha Deserializer": "Deserializer",
     "Mecha Model Recipe": "Model",
     "Lora Mecha Recipe": "Lora",
     "Mecha Recipe List": "Recipe List",
