@@ -54,7 +54,10 @@ class BlocksMechaHyper:
             ) | sd_mecha.blocks(
                 model_arch,
                 model_component if model_component else None,
-                *((float(block.strip()) for block in blocks.split(",")) if blocks.strip() else ()),
+                *((
+                    float(block.strip()) if block.strip() else default
+                    for block in blocks.split(",")
+                ) if blocks.strip() else ()),
                 strict=validate_num_blocks,
             ),
         except ValueError as e:
