@@ -86,6 +86,44 @@ class FloatMechaHyper:
         return value,
 
 
+def register_defaults_hyper_nodes():
+    for arch_id in sd_mecha.extensions.model_arch.get_all():
+        arch = sd_mecha.extensions.model_arch.resolve(arch_id)
+        class_name = f"{arch_id.upper()}DefaultsHyper"
+        title_name = f"{arch_id.upper()} Defaults Hyper"
+        NODE_CLASS_MAPPINGS[title_name] = make_defaults_hyper_node_class(class_name, arch)
+
+
+def make_defaults_hyper_node_class(class_name: str, arch: sd_mecha.extensions.model_arch.ModelArch) -> type:
+    return type(class_name, (object,), {
+        "INPUT_TYPES": lambda: {
+            "required": {
+                **{
+                    component: ("FLOAT", {
+                        "default": 0.0,
+                    })
+                    for component in arch.components
+                },
+            },
+        },
+        "RETURN_TYPES": ("MECHA_HYPER",),
+        "RETURN_NAMES": ("hyper",),
+        "FUNCTION": "execute",
+        "OUTPUT_NODE": False,
+        "CATEGORY": "advanced/model_merging/mecha",
+        "execute": get_defaults_hyper_node_execute(arch),
+    })
+
+
+def get_defaults_hyper_node_execute(arch: sd_mecha.extensions.model_arch.ModelArch):
+    def execute(self, **kwargs):
+        res = {}
+        for component in arch.components:
+            res = res | sd_mecha.default(arch.identifier, component, kwargs[component])
+        return res,
+    return execute
+
+
 NODE_CLASS_MAPPINGS = {
     "Blocks Mecha Hyper": BlocksMechaHyper,
     "Float Mecha Hyper": FloatMechaHyper,
@@ -95,3 +133,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Blocks Mecha Hyper": "Blocks",
     "Float Mecha Hyper": "Float",
 }
+
+register_defaults_hyper_nodes()
