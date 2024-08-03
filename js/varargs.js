@@ -123,7 +123,7 @@ app.registerExtension({
 	loadedGraphNode(node, app) {
 		for (const iv of node.inputs || []) {
 		    if (iv.type === "MECHA_RECIPE" || iv.type === "MECHA_RECIPE_LIST") {
-		        for (const ik of customDefInputNames[node.title]) {
+		        for (const ik of customDefInputNames[node.title] || []) {
 		            if (ik.split(" ")[0] === iv.name.split(" ")[0]) {
 		                iv.name = ik;
 		            }
