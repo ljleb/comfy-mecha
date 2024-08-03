@@ -372,7 +372,7 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
         "INPUT_TYPES": lambda: {
             "required": {
                 **{
-                    model_name: ("MECHA_RECIPE",)
+                    f"{model_name} ({merge_space})": ("MECHA_RECIPE",)
                     for model_name, merge_space in zip(method.get_model_names(), method.get_input_merge_spaces()[0])
                 },
                 **{
@@ -389,7 +389,7 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
             },
             "optional": {
                 **({
-                    method.get_model_varargs_name(): ("MECHA_RECIPE_LIST", {"default": []}),
+                    f"{method.get_model_varargs_name()} ({method.get_input_merge_spaces()[1]})": ("MECHA_RECIPE_LIST", {"default": []}),
                 } if method.get_model_varargs_name() is not None else {}),
                 **{
                     f"{hyper_name} ({method.get_default_hypers()[hyper_name]})": ("MECHA_HYPER,FLOAT,INT", {"default": method.get_default_hypers()[hyper_name]})
@@ -452,7 +452,7 @@ def get_method_node_execute(method: MergeMethod):
         if device == "default":
             device = None
 
-        # remove default values from keys
+        # remove default values / merge space from keys
         # comfy nodes cannot distinguish display names from id names
         # in consequence we have to unmangle things here
         for k in list(kwargs):
