@@ -17,6 +17,8 @@ class BlocksMechaHyper:
                 }),
                 "default": ("FLOAT", {
                     "default": 0.0,
+                    "min": -2**64,
+                    "max": 2**64,
                     "step": 0.01,
                 }),
                 "model_arch": (sd_mecha.extensions.model_arch.get_all(),),
@@ -69,6 +71,8 @@ class FloatMechaHyper:
             "required": {
                 "value": ("FLOAT", {
                     "default": 0.0,
+                    "min": -2**64,
+                    "max": 2**64,
                     "step": 0.01,
                 }),
             },
@@ -101,6 +105,9 @@ def make_defaults_hyper_node_class(class_name: str, arch: sd_mecha.extensions.mo
                 **{
                     component: ("FLOAT", {
                         "default": 0.0,
+                        "min": -2**64,
+                        "max": 2**64,
+                        "step": 0.01,
                     })
                     for component in arch.components
                 },

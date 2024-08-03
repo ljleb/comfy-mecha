@@ -376,7 +376,7 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
                     for model_name, merge_space in zip(method.get_model_names(), method.get_input_merge_spaces()[0])
                 },
                 **{
-                    hyper_name: ("MECHA_HYPER,FLOAT,INT",)
+                    hyper_name: ("MECHA_HYPER",)
                     for hyper_name in all_hyper_names
                     if hyper_name not in method.get_default_hypers()
                 },
@@ -392,7 +392,7 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
                     f"{method.get_model_varargs_name()} ({method.get_input_merge_spaces()[1]})": ("MECHA_RECIPE_LIST", {"default": []}),
                 } if method.get_model_varargs_name() is not None else {}),
                 **{
-                    f"{hyper_name} ({method.get_default_hypers()[hyper_name]})": ("MECHA_HYPER,FLOAT,INT", {"default": method.get_default_hypers()[hyper_name]})
+                    f"{hyper_name} ({method.get_default_hypers()[hyper_name]})": ("MECHA_HYPER", {"default": method.get_default_hypers()[hyper_name]})
                     for hyper_name in all_hyper_names
                     if hyper_name in method.get_default_hypers()
                 },
