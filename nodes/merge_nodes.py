@@ -300,7 +300,6 @@ def load_checkpoint_guess_config(state_dict):
         model,
         load_device=load_device,
         offload_device=model_management.unet_offload_device(),
-        current_device=inital_load_device,
     )
     if inital_load_device != torch.device("cpu"):
         logging.info("loaded straight to GPU")
