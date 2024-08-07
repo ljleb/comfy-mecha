@@ -200,10 +200,10 @@ class MechaMerger:
             threads=threads if threads > 0 else None,
             total_buffer_size=total_buffer_size,
         )
-        res = load_state_dict_guess_config(state_dict, output_vae=False)
+        res = load_state_dict_guess_config(state_dict, output_vae=False)[:2]
         if temporary_merge:
             temporary_merged_recipes.append((recipe_txt, res))
-        return *res[:2], recipe_txt
+        return *res, recipe_txt
 
 
 memory_units = ('B', 'K', 'M', 'G')
