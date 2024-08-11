@@ -1,6 +1,5 @@
 import functools
 import gc
-import logging
 import re
 from typing import Optional, List, Tuple, Any, Iterable
 import sd_mecha
@@ -9,8 +8,8 @@ import tqdm
 from sd_mecha.extensions.merge_method import MergeMethod
 import folder_paths
 import comfy
-from comfy import model_management, model_detection
-from comfy.sd import CLIP
+from comfy import model_management
+from comfy.sd import load_state_dict_guess_config
 import execution
 
 
@@ -201,7 +200,7 @@ class MechaMerger:
             threads=threads if threads > 0 else None,
             total_buffer_size=total_buffer_size,
         )
-        res = load_checkpoint_guess_config(state_dict)
+        res = load_state_dict_guess_config(state_dict, output_vae=False)[:2]
         if temporary_merge:
             temporary_merged_recipes.append((recipe_txt, res))
         return *res, recipe_txt
@@ -254,58 +253,6 @@ class ComfyTqdm:
             return self.__dict__[item]
         except KeyError:
             return getattr(self.progress, item)
-
-
-def load_checkpoint_guess_config(state_dict):
-    clip = None
-
-    # this code is going to rot like crazy because of hard coded key prefixes
-    # I'm not going to bother with it because comfyui has this hardcoded too
-    parameters = comfy.utils.calculate_parameters(state_dict, "model.diffusion_model.")
-    load_device = model_management.get_torch_device()
-
-    model_config = model_detection.model_config_from_unet(state_dict, "model.diffusion_model.")
-    unet_dtype = model_management.unet_dtype(model_params=parameters, supported_dtypes=model_config.supported_inference_dtypes)
-    manual_cast_dtype = model_management.unet_manual_cast(unet_dtype, load_device, model_config.supported_inference_dtypes)
-    model_config.set_inference_dtype(unet_dtype, manual_cast_dtype)
-
-    inital_load_device = model_management.unet_inital_load_device(parameters, unet_dtype)
-    model = model_config.get_model(state_dict, "model.diffusion_model.", device=inital_load_device)
-    model.load_model_weights(state_dict, "model.diffusion_model.")
-
-    clip_target = model_config.clip_target(state_dict=state_dict)
-    if clip_target is not None:
-        clip_sd = model_config.process_clip_state_dict(state_dict)
-        if len(clip_sd) > 0:
-            clip = CLIP(clip_target, embedding_directory=folder_paths.get_folder_paths("embeddings"))
-            m, u = clip.load_sd(clip_sd, full_model=True)
-            if len(m) > 0:
-                m_filter = list(filter(lambda a: ".logit_scale" not in a and ".transformer.text_projection.weight" not in a, m))
-                if len(m_filter) > 0:
-                    logging.warning("clip missing: {}".format(m))
-                else:
-                    logging.debug("clip missing: {}".format(m))
-
-            if len(u) > 0:
-                logging.debug("clip unexpected {}:".format(u))
-        else:
-            logging.warning("no CLIP/text encoder weights in checkpoint, the text encoder model will not be loaded.")
-
-    # skip vae
-    left_over = [k for k in state_dict.keys() if not k.startswith("first_stage_model.")]
-    if len(left_over) > 0:
-        print("left over keys:", left_over)
-
-    model_patcher = comfy.model_patcher.ModelPatcher(
-        model,
-        load_device=load_device,
-        offload_device=model_management.unet_offload_device(),
-    )
-    if inital_load_device != torch.device("cpu"):
-        logging.info("loaded straight to GPU")
-        model_management.load_model_gpu(model_patcher)
-
-    return model_patcher, clip
 
 
 class MechaModelRecipe:
