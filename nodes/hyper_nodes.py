@@ -21,12 +21,13 @@ class BlocksMechaHyper:
                     "max": 2**64,
                     "step": 0.01,
                 }),
-                "model_arch": (sd_mecha.extensions.model_arch.get_all(),),
+                "model_config": ([x.identifier for x in sd_mecha.extensions.model_config.get_all()],),
                 "model_component": (["unet", "txt", "txt2", "t5xxl"], {
                     "default": "unet",
                 }),
             },
         }
+
     RETURN_TYPES = ("MECHA_HYPER",)
     RETURN_NAMES = ("hyper",)
     FUNCTION = "execute"
@@ -39,7 +40,7 @@ class BlocksMechaHyper:
         blocks: str,
         validate_num_blocks: bool,
         default: float,
-        model_arch: str,
+        model_config: str,
         model_component: str,
     ):
         if preset != "custom":
@@ -49,19 +50,19 @@ class BlocksMechaHyper:
 
         try:
             return sd_mecha.default(
-                model_arch=model_arch,
+                model_config,
                 value=default,
             ) | sd_mecha.blocks(
-                model_arch,
+                model_config,
                 model_component if model_component else None,
                 *((
-                    float(block.strip()) if block.strip() else default
-                    for block in blocks.split(",")
-                ) if blocks.strip() else ()),
+                      float(block.strip()) if block.strip() else default
+                      for block in blocks.split(",")
+                  ) if blocks.strip() else ()),
                 strict=validate_num_blocks,
             ),
         except ValueError as e:
-            raise ValueError(f"Wrong number of blocks for model architecture '{model_arch}'") from e
+            raise ValueError(f"Wrong number of blocks for model architecture '{model_config}'") from e
 
 
 class FloatMechaHyper:
@@ -77,6 +78,7 @@ class FloatMechaHyper:
                 }),
             },
         }
+
     RETURN_TYPES = ("MECHA_HYPER",)
     RETURN_NAMES = ("hyper",)
     FUNCTION = "execute"
@@ -91,14 +93,13 @@ class FloatMechaHyper:
 
 
 def register_defaults_hyper_nodes():
-    for arch_id in sd_mecha.extensions.model_arch.get_all():
-        arch = sd_mecha.extensions.model_arch.resolve(arch_id)
-        class_name = f"{arch_id.upper()}DefaultsHyper"
-        title_name = f"{arch_id.upper()} Defaults Hyper"
-        NODE_CLASS_MAPPINGS[title_name] = make_defaults_hyper_node_class(class_name, arch)
+    for config in sd_mecha.extensions.model_config.get_all():
+        class_name = f"{config.identifier.upper()}DefaultsHyper"
+        title_name = f"{config.identifier} Defaults Hyper"
+        NODE_CLASS_MAPPINGS[title_name] = make_defaults_hyper_node_class(class_name, config)
 
 
-def make_defaults_hyper_node_class(class_name: str, arch: sd_mecha.extensions.model_arch.ModelArch) -> type:
+def make_defaults_hyper_node_class(class_name: str, config: sd_mecha.extensions.model_config.ModelConfig) -> type:
     return type(class_name, (object,), {
         "INPUT_TYPES": lambda: {
             "required": {
@@ -109,7 +110,7 @@ def make_defaults_hyper_node_class(class_name: str, arch: sd_mecha.extensions.mo
                         "max": 2**64,
                         "step": 0.01,
                     })
-                    for component in arch.components
+                    for component in config.components
                 },
             },
         },
@@ -118,15 +119,15 @@ def make_defaults_hyper_node_class(class_name: str, arch: sd_mecha.extensions.mo
         "FUNCTION": "execute",
         "OUTPUT_NODE": False,
         "CATEGORY": "advanced/model_merging/mecha",
-        "execute": get_defaults_hyper_node_execute(arch),
+        "execute": get_defaults_hyper_node_execute(config),
     })
 
 
-def get_defaults_hyper_node_execute(arch: sd_mecha.extensions.model_arch.ModelArch):
+def get_defaults_hyper_node_execute(config: sd_mecha.extensions.model_config.ModelConfig):
     def execute(self, **kwargs):
         res = {}
-        for component in arch.components:
-            res = res | sd_mecha.default(arch.identifier, component, kwargs[component])
+        for component in config.components:
+            res = res | sd_mecha.default(config.identifier, component, kwargs[component])
         return res,
     return execute
 
