@@ -135,6 +135,9 @@ class MechaMerger:
                 }),
                 "temporary_merge": ("BOOLEAN", {
                     "default": True,
+                }),
+                "strict_weight_space": ("BOOLEAN", {
+                    "default": True,
                 })
             },
         }
@@ -162,6 +165,7 @@ class MechaMerger:
         total_buffer_size: str,
         threads: int,
         temporary_merge: bool,
+        strict_weight_space: bool,
     ):
         global temporary_merged_recipes, prompt_executor
         total_buffer_size = memory_to_bytes(total_buffer_size)
@@ -199,6 +203,7 @@ class MechaMerger:
             save_device=output_device,
             threads=threads if threads > 0 else None,
             total_buffer_size=total_buffer_size,
+            strict_weight_space=strict_weight_space,
         )
         res = load_state_dict_guess_config(state_dict, output_vae=False)[:2]
         if temporary_merge:
