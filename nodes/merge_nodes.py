@@ -318,13 +318,13 @@ def register_merge_methods():
 
 
 def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
-    all_hyper_names = method.get_hyper_names() - method.get_volatile_hyper_names()
+    all_hyper_names = sorted(list(method.get_hyper_names() - method.get_volatile_hyper_names()))
     return type(class_name, (object,), {
         "INPUT_TYPES": lambda: {
             "required": {
                 **{
                     f"{model_name} ({merge_space})": ("MECHA_RECIPE",)
-                    for model_name, merge_space in zip(method.get_model_names(), method.get_input_merge_spaces()[0])
+                    for model_name, merge_space in zip(sorted(method.get_model_names()), method.get_input_merge_spaces()[0])
                 },
                 **{
                     hyper_name: ("MECHA_HYPER",)
