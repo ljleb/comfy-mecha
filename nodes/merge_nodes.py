@@ -86,6 +86,7 @@ class MechaDeserializer:
             "required": {
                 "recipe_txt": ("STRING", {
                     "default": "",
+                    "multiline": True,
                     "forceInput": True,
                 }),
             },
@@ -205,7 +206,7 @@ class MechaMerger:
             total_buffer_size=total_buffer_size,
             strict_weight_space=strict_weight_space,
         )
-        res = load_state_dict_guess_config(state_dict, output_vae=False)[:2]
+        res = load_state_dict_guess_config(state_dict, embedding_directory=folder_paths.get_folder_paths("embeddings"), output_vae=False)[:2]
         if temporary_merge:
             temporary_merged_recipes.append((recipe_txt, res))
         return *res, recipe_txt
