@@ -142,8 +142,8 @@ class MechaMerger:
                 })
             },
         }
-    RETURN_TYPES = ("MODEL", "CLIP", "STRING")
-    RETURN_NAMES = ("MODEL", "CLIP", "recipe_txt")
+    RETURN_TYPES = ("MODEL", "CLIP", "VAE", "STRING")
+    RETURN_NAMES = ("MODEL", "CLIP", "VAE", "recipe_txt")
     FUNCTION = "execute"
     OUTPUT_NODE = False
     CATEGORY = "advanced/model_merging/mecha"
@@ -206,7 +206,7 @@ class MechaMerger:
             total_buffer_size=total_buffer_size,
             strict_weight_space=strict_weight_space,
         )
-        res = load_state_dict_guess_config(state_dict, embedding_directory=folder_paths.get_folder_paths("embeddings"), output_vae=False)[:2]
+        res = load_state_dict_guess_config(state_dict, embedding_directory=folder_paths.get_folder_paths("embeddings"))[:3]
         if temporary_merge:
             temporary_merged_recipes.append((recipe_txt, res))
         return *res, recipe_txt
