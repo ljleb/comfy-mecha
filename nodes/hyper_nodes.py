@@ -110,7 +110,7 @@ def make_defaults_hyper_node_class(class_name: str, config: sd_mecha.extensions.
                         "max": 2**64,
                         "step": 0.01,
                     })
-                    for component in config.components
+                    for component in sorted(list(config.components))
                 },
             },
         },
