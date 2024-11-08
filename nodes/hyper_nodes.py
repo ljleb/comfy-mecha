@@ -22,7 +22,7 @@ class BlocksMechaHyper:
                     "step": 0.01,
                 }),
                 "model_config": ([x.identifier for x in sd_mecha.extensions.model_config.get_all()],),
-                "model_component": (["unet", "txt", "txt2", "t5xxl"], {
+                "model_component": (["unet", "clip_l", "clig_g", "t5xxl"], {
                     "default": "unet",
                 }),
             },

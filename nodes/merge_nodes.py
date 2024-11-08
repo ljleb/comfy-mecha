@@ -7,6 +7,7 @@ import sd_mecha
 import torch.cuda
 import tqdm
 from sd_mecha.extensions.merge_method import MergeMethod
+from sd_mecha.extensions.merge_space import get_identifiers
 from sd_mecha.recipe_merger import LoadInputDictsVisitor, CloseInputDictsVisitor
 import folder_paths
 import comfy
@@ -151,6 +152,7 @@ class MechaMerger:
                 })
             },
         }
+
     RETURN_TYPES = ("MODEL", "CLIP", "VAE", "STRING")
     RETURN_NAMES = ("MODEL", "CLIP", "VAE", "recipe_txt")
     FUNCTION = "execute"
@@ -351,7 +353,7 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
             },
             "optional": {
                 **({
-                    f"{method.get_model_varargs_name()} ({'|'.join(method.get_input_merge_spaces()[1])})": ("MECHA_RECIPE_LIST", {"default": []}),
+                    f"{method.get_model_varargs_name()} ({'|'.join(sorted(get_identifiers(method.get_input_merge_spaces()[1])))})": ("MECHA_RECIPE_LIST", {"default": []}),
                 } if method.get_model_varargs_name() is not None else {}),
                 **{
                     f"{hyper_name} ({method.get_default_hypers()[hyper_name]})": ("MECHA_HYPER", {"default": method.get_default_hypers()[hyper_name]})
