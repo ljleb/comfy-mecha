@@ -337,7 +337,7 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
             "required": {
                 **{
                     f"{model_name} ({'|'.join(sd_mecha.extensions.merge_space.get_identifiers(merge_space))})": ("MECHA_RECIPE",)
-                    for model_name, merge_space in zip(sorted(method.get_model_names()), method.get_input_merge_spaces()[0])
+                    for model_name, merge_space in zip(sorted(method.get_input_names()), method.get_input_merge_spaces()[0])
                 },
                 **{
                     hyper_name: ("MECHA_HYPER",)
@@ -353,8 +353,8 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
             },
             "optional": {
                 **({
-                    f"{method.get_model_varargs_name()} ({'|'.join(sorted(get_identifiers(method.get_input_merge_spaces()[1])))})": ("MECHA_RECIPE_LIST", {"default": []}),
-                } if method.get_model_varargs_name() is not None else {}),
+                    f"{method.get_input_varargs_name()} ({'|'.join(sorted(get_identifiers(method.get_input_merge_spaces()[1])))})": ("MECHA_RECIPE_LIST", {"default": []}),
+                } if method.get_input_varargs_name() is not None else {}),
                 **{
                     f"{hyper_name} ({method.get_default_hypers()[hyper_name]})": ("MECHA_HYPER", {"default": method.get_default_hypers()[hyper_name]})
                     for hyper_name in all_hyper_names
@@ -426,9 +426,9 @@ def get_method_node_execute(method: MergeMethod):
                 kwargs[new_k] = kwargs[k]
                 del kwargs[k]
 
-        models = [kwargs[m] for m in method.get_model_names()]
-        if method.get_model_varargs_name() is not None:
-            models.extend(kwargs[method.get_model_varargs_name()])
+        models = [kwargs[m] for m in method.get_input_names()]
+        if method.get_input_varargs_name() is not None:
+            models.extend(kwargs[method.get_input_varargs_name()])
 
         hypers = {
             k: kwargs[k]
