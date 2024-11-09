@@ -2,6 +2,7 @@ import pathlib
 import importlib.util
 import sys
 import traceback
+import sd_mecha
 
 extensions_path = pathlib.Path(__file__).parent / "mecha_extensions"
 for path in extensions_path.iterdir():

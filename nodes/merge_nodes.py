@@ -280,7 +280,13 @@ class MechaModelRecipe:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "model_path": ([f for f in folder_paths.get_filename_list("checkpoints") if f.endswith(".safetensors")],),
+                "model_path": (
+                    [
+                        f
+                        for f in folder_paths.get_filename_list("checkpoints") + folder_paths.get_filename_list("loras")
+                        if f.endswith(".safetensors")
+                    ],
+                ),
             },
         }
 
@@ -320,9 +326,8 @@ class MechaLoraRecipe:
 
 
 def register_merge_methods():
-    for method_name in sd_mecha.extensions.merge_method._merge_methods_registry:
-        method = sd_mecha.extensions.merge_method.resolve(method_name)
-
+    for method in sd_mecha.extensions.merge_method.get_all():
+        method_name = method.get_identifier()
         class_name = f"{snake_case_to_upper(method_name)}MechaRecipe"
         short_title_name = snake_case_to_title(method_name)
         title_name = f"{snake_case_to_title(method_name)} Mecha Recipe"
@@ -436,7 +441,7 @@ def get_method_node_execute(method: MergeMethod):
             if k in kwargs
         }
 
-        return method.create_recipe(*models, **hypers, dtype=dtype, device=device),
+        return method(*models, **hypers, dtype=dtype, device=device),
 
     return execute
 
