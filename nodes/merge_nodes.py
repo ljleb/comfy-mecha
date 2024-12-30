@@ -133,7 +133,7 @@ class MechaMerger:
                     "default": "cpu",
                 }),
                 "output_dtype": (list(DTYPE_MAPPING.keys()), {
-                    "default": "fp16",
+                    "default": "bf16",
                 }),
                 "total_buffer_size": ("STRING", {
                     "default": "0.5G",
@@ -216,7 +216,7 @@ class MechaMerger:
             fallback_model=fallback_model,
             save_dtype=DTYPE_MAPPING[output_dtype],
             save_device=output_device,
-            threads=threads if threads > 0 else None,
+            threads=threads if threads >= 0 else None,
             total_buffer_size=total_buffer_size,
             strict_weight_space=strict_weight_space,
         )
@@ -322,7 +322,29 @@ class MechaLoraRecipe:
         self,
         model_path: str,
     ):
-        return sd_mecha.model(model_path),
+        recipe = sd_mecha.model(model_path)
+        try:
+            recipe.accept(LoadInputDictsVisitor(
+                [pathlib.Path(p) for p in folder_paths.get_folder_paths("loras")],
+                0,
+            ))
+
+            if recipe.model_config.identifier == "sdxl-kohya_kohya_lora":
+                convert_to_base = sd_mecha.extensions.merge_method.resolve("convert_'sdxl-kohya_kohya_lora'_to_base").create_recipe
+                convert_to_sgm = sd_mecha.extensions.merge_method.resolve("convert_'sdxl-kohya'_to_'sdxl-sgm'").create_recipe
+                convert_to_sgm_base = lambda *args, **kwargs: convert_to_sgm(convert_to_base(*args, **kwargs))
+                recipe = convert_to_sgm_base(recipe)
+            elif recipe.model_config.identifier == "sd1-kohya_kohya_lora":
+                convert_to_base = sd_mecha.extensions.merge_method.resolve("convert_'sd1-kohya_kohya_lora'_to_base").create_recipe
+                convert_to_ldm = sd_mecha.extensions.merge_method.resolve("convert_'sd1-kohya'_to_'sd1-ldm'").create_recipe
+                convert_to_ldm_base = lambda *args, **kwargs: convert_to_ldm(convert_to_base(*args, **kwargs))
+                recipe = convert_to_ldm_base(recipe)
+            else:
+                raise RuntimeError(f"unsupported lora model config: {recipe.model_config.identifier}")
+        finally:
+            recipe.accept(CloseInputDictsVisitor())
+
+        return recipe,
 
 
 def register_merge_methods():
@@ -490,7 +512,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Mecha Merger": "Merger",
     "Mecha Serializer": "Serializer",
     "Mecha Deserializer": "Deserializer",
-    "Mecha Model Recipe": "Model",
+    "Model Mecha Recipe": "Model",
     "Lora Mecha Recipe": "Lora",
     "Mecha Recipe List": "Recipe List",
 }
