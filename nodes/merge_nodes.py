@@ -1,11 +1,14 @@
 import functools
 import gc
+import pathlib
 import re
-from typing import Optional, List, Tuple, Any, Iterable
+from typing import List, Tuple, Iterable, Any, Optional
 import sd_mecha
 import torch.cuda
 import tqdm
 from sd_mecha.extensions.merge_method import MergeMethod
+from sd_mecha.extensions.merge_space import get_identifiers
+from sd_mecha.recipe_merger import LoadInputDictsVisitor, CloseInputDictsVisitor
 import folder_paths
 import comfy
 from comfy import model_management
@@ -76,7 +79,14 @@ class MechaSerializer:
     CATEGORY = "advanced/model_merging/mecha"
 
     def execute(self, recipe):
-        return sd_mecha.serialize(recipe),
+        try:
+            recipe.accept(LoadInputDictsVisitor(
+                [pathlib.Path(p) for p in folder_paths.get_folder_paths("checkpoints") + folder_paths.get_folder_paths("loras")],
+                0,
+            ))
+            return sd_mecha.serialize(recipe),
+        finally:
+            recipe.accept(CloseInputDictsVisitor())
 
 
 class MechaDeserializer:
@@ -123,14 +133,14 @@ class MechaMerger:
                     "default": "cpu",
                 }),
                 "output_dtype": (list(DTYPE_MAPPING.keys()), {
-                    "default": "fp16",
+                    "default": "bf16",
                 }),
                 "total_buffer_size": ("STRING", {
                     "default": "0.5G",
                 }),
                 "threads": ("INT", {
-                    "default": 0,
-                    "min": 0,
+                    "default": -1,
+                    "min": -1,
                     "max": 16,
                     "step": 1,
                 }),
@@ -142,6 +152,7 @@ class MechaMerger:
                 })
             },
         }
+
     RETURN_TYPES = ("MODEL", "CLIP", "VAE", "STRING")
     RETURN_NAMES = ("MODEL", "CLIP", "VAE", "recipe_txt")
     FUNCTION = "execute"
@@ -171,22 +182,25 @@ class MechaMerger:
         global temporary_merged_recipes, prompt_executor
         total_buffer_size = memory_to_bytes(total_buffer_size)
 
+        recipe.accept(LoadInputDictsVisitor(
+            [pathlib.Path(p) for p in folder_paths.get_folder_paths("checkpoints") + folder_paths.get_folder_paths("loras")],
+            0,
+        ))
         recipe_txt = sd_mecha.serialize(recipe)
+        recipe.accept(CloseInputDictsVisitor())
+
         try:
             already_merged_index = [t[0] for t in temporary_merged_recipes].index(recipe_txt)
-            already_merged_recipe = temporary_merged_recipes[already_merged_index]
+            return temporary_merged_recipes[already_merged_index][1]
         except ValueError:
-            already_merged_recipe = None
-        if already_merged_recipe is not None:
-            return already_merged_recipe[1]
-        if temporary_merged_recipes and already_merged_recipe is None:
-            free_temporary_merges(prompt_executor)
+            if temporary_merged_recipes:
+                free_temporary_merges(prompt_executor)
 
-        model_arch = getattr(recipe.model_arch, "identifier", None)
-        if fallback_model == "none" or not model_arch:
+        model_config = getattr(recipe.model_config, "identifier", None)
+        if fallback_model == "none" or not model_config:
             fallback_model = None
         else:
-            fallback_model = sd_mecha.model(fallback_model, model_arch=model_arch)
+            fallback_model = sd_mecha.model(fallback_model, model_config=model_config)
 
         merger = sd_mecha.RecipeMerger(
             models_dir=folder_paths.get_folder_paths("checkpoints") + folder_paths.get_folder_paths("loras"),
@@ -202,7 +216,7 @@ class MechaMerger:
             fallback_model=fallback_model,
             save_dtype=DTYPE_MAPPING[output_dtype],
             save_device=output_device,
-            threads=threads if threads > 0 else None,
+            threads=threads if threads >= 0 else None,
             total_buffer_size=total_buffer_size,
             strict_weight_space=strict_weight_space,
         )
@@ -266,10 +280,16 @@ class MechaModelRecipe:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "model_path": ([f for f in folder_paths.get_filename_list("checkpoints") if f.endswith(".safetensors")],),
-                "model_arch": (sd_mecha.extensions.model_arch.get_all(),),
+                "model_path": (
+                    [
+                        f
+                        for f in folder_paths.get_filename_list("checkpoints") + folder_paths.get_filename_list("loras")
+                        if f.endswith(".safetensors")
+                    ],
+                ),
             },
         }
+
     RETURN_TYPES = ("MECHA_RECIPE",)
     RETURN_NAMES = ("recipe",)
     FUNCTION = "execute"
@@ -279,9 +299,8 @@ class MechaModelRecipe:
     def execute(
         self,
         model_path: str,
-        model_arch: str,
     ):
-        return sd_mecha.model(model_path, model_arch=model_arch),
+        return sd_mecha.model(model_path),
 
 
 class MechaLoraRecipe:
@@ -290,9 +309,9 @@ class MechaLoraRecipe:
         return {
             "required": {
                 "model_path": ([f for f in folder_paths.get_filename_list("loras") if f.endswith(".safetensors")],),
-                "model_arch": (sd_mecha.extensions.model_arch.get_all(),),
             },
         }
+
     RETURN_TYPES = ("MECHA_RECIPE",)
     RETURN_NAMES = ("recipe",)
     FUNCTION = "execute"
@@ -302,15 +321,35 @@ class MechaLoraRecipe:
     def execute(
         self,
         model_path: str,
-        model_arch: str,
     ):
-        return sd_mecha.lora(model_path, model_arch=model_arch),
+        recipe = sd_mecha.model(model_path)
+        try:
+            recipe.accept(LoadInputDictsVisitor(
+                [pathlib.Path(p) for p in folder_paths.get_folder_paths("loras")],
+                0,
+            ))
+
+            if recipe.model_config.identifier == "sdxl-kohya_kohya_lora":
+                convert_to_base = sd_mecha.extensions.merge_method.resolve("convert_'sdxl-kohya_kohya_lora'_to_base").create_recipe
+                convert_to_sgm = sd_mecha.extensions.merge_method.resolve("convert_'sdxl-kohya'_to_'sdxl-sgm'").create_recipe
+                convert_to_sgm_base = lambda *args, **kwargs: convert_to_sgm(convert_to_base(*args, **kwargs))
+                recipe = convert_to_sgm_base(recipe)
+            elif recipe.model_config.identifier == "sd1-kohya_kohya_lora":
+                convert_to_base = sd_mecha.extensions.merge_method.resolve("convert_'sd1-kohya_kohya_lora'_to_base").create_recipe
+                convert_to_ldm = sd_mecha.extensions.merge_method.resolve("convert_'sd1-kohya'_to_'sd1-ldm'").create_recipe
+                convert_to_ldm_base = lambda *args, **kwargs: convert_to_ldm(convert_to_base(*args, **kwargs))
+                recipe = convert_to_ldm_base(recipe)
+            else:
+                raise RuntimeError(f"unsupported lora model config: {recipe.model_config.identifier}")
+        finally:
+            recipe.accept(CloseInputDictsVisitor())
+
+        return recipe,
 
 
 def register_merge_methods():
-    for method_name in sd_mecha.extensions.merge_method._merge_methods_registry:
-        method = sd_mecha.extensions.merge_method.resolve(method_name)
-
+    for method in sd_mecha.extensions.merge_method.get_all():
+        method_name = method.get_identifier()
         class_name = f"{snake_case_to_upper(method_name)}MechaRecipe"
         short_title_name = snake_case_to_title(method_name)
         title_name = f"{snake_case_to_title(method_name)} Mecha Recipe"
@@ -324,8 +363,8 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
         "INPUT_TYPES": lambda: {
             "required": {
                 **{
-                    f"{model_name} ({merge_space})": ("MECHA_RECIPE",)
-                    for model_name, merge_space in zip(sorted(method.get_model_names()), method.get_input_merge_spaces()[0])
+                    f"{model_name} ({'|'.join(sd_mecha.extensions.merge_space.get_identifiers(merge_space))})": ("MECHA_RECIPE",)
+                    for model_name, merge_space in zip(sorted(method.get_input_names()), method.get_input_merge_spaces()[0])
                 },
                 **{
                     hyper_name: ("MECHA_HYPER",)
@@ -341,8 +380,8 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
             },
             "optional": {
                 **({
-                    f"{method.get_model_varargs_name()} ({method.get_input_merge_spaces()[1]})": ("MECHA_RECIPE_LIST", {"default": []}),
-                } if method.get_model_varargs_name() is not None else {}),
+                    f"{method.get_input_varargs_name()} ({'|'.join(sorted(get_identifiers(method.get_input_merge_spaces()[1])))})": ("MECHA_RECIPE_LIST", {"default": []}),
+                } if method.get_input_varargs_name() is not None else {}),
                 **{
                     f"{hyper_name} ({method.get_default_hypers()[hyper_name]})": ("MECHA_HYPER", {"default": method.get_default_hypers()[hyper_name]})
                     for hyper_name in all_hyper_names
@@ -374,6 +413,7 @@ class MechaRecipeList:
                 for i in range(MAX_VARARGS_MODELS)
             }
         }
+
     RETURN_TYPES = ("MECHA_RECIPE_LIST",)
     RETURN_NAMES = ("recipes",)
     FUNCTION = "execute"
@@ -413,9 +453,9 @@ def get_method_node_execute(method: MergeMethod):
                 kwargs[new_k] = kwargs[k]
                 del kwargs[k]
 
-        models = [kwargs[m] for m in method.get_model_names()]
-        if method.get_model_varargs_name() is not None:
-            models.extend(kwargs[method.get_model_varargs_name()])
+        models = [kwargs[m] for m in method.get_input_names()]
+        if method.get_input_varargs_name() is not None:
+            models.extend(kwargs[method.get_input_varargs_name()])
 
         hypers = {
             k: kwargs[k]
@@ -423,7 +463,7 @@ def get_method_node_execute(method: MergeMethod):
             if k in kwargs
         }
 
-        return method.create_recipe(*models, **hypers, dtype=dtype, device=device),
+        return method(*models, **hypers, dtype=dtype, device=device),
 
     return execute
 
@@ -472,7 +512,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Mecha Merger": "Merger",
     "Mecha Serializer": "Serializer",
     "Mecha Deserializer": "Deserializer",
-    "Mecha Model Recipe": "Model",
+    "Model Mecha Recipe": "Model",
     "Lora Mecha Recipe": "Lora",
     "Mecha Recipe List": "Recipe List",
 }
