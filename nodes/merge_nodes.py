@@ -7,7 +7,7 @@ import sd_mecha
 import torch.cuda
 import tqdm
 from sd_mecha.extensions.merge_method import MergeMethod
-from sd_mecha.recipe_merger import LoadInputDictsVisitor, CloseInputDictsVisitor
+from sd_mecha.recipe_merger import LoadInputDictsVisitor, CloseInputDictsVisitor, open_input_dicts
 import folder_paths
 import comfy
 from comfy import model_management
@@ -78,14 +78,13 @@ class MechaSerializer:
     CATEGORY = "advanced/model_merging/mecha"
 
     def execute(self, recipe):
-        try:
-            recipe.accept(LoadInputDictsVisitor(
-                [pathlib.Path(p) for p in folder_paths.get_folder_paths("checkpoints") + folder_paths.get_folder_paths("loras")],
-                0,
-            ))
+        with open_input_dicts(
+            recipe,
+            [pathlib.Path(p) for p in
+             folder_paths.get_folder_paths("checkpoints") + folder_paths.get_folder_paths("loras")],
+            buffer_size_per_dict=0,
+        ):
             return sd_mecha.serialize(recipe),
-        finally:
-            recipe.accept(CloseInputDictsVisitor())
 
 
 class MechaDeserializer:
@@ -107,7 +106,7 @@ class MechaDeserializer:
     OUTPUT_NODE = False
     CATEGORY = "advanced/model_merging/mecha"
 
-    def execute(self, recipe_txt):
+    def execute(self, recipe_txt: str):
         return sd_mecha.deserialize(recipe_txt.split("\n")),
 
 
@@ -181,12 +180,12 @@ class MechaMerger:
         global temporary_merged_recipes, prompt_executor
         total_buffer_size = memory_to_bytes(total_buffer_size)
 
-        recipe.accept(LoadInputDictsVisitor(
+        with open_input_dicts(
+            recipe,
             [pathlib.Path(p) for p in folder_paths.get_folder_paths("checkpoints") + folder_paths.get_folder_paths("loras")],
-            0,
-        ))
-        recipe_txt = sd_mecha.serialize(recipe)
-        recipe.accept(CloseInputDictsVisitor())
+            buffer_size_per_dict=0,
+        ):
+            recipe_txt = sd_mecha.serialize(recipe)
 
         try:
             already_merged_index = [t[0] for t in temporary_merged_recipes].index(recipe_txt)

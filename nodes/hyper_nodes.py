@@ -105,14 +105,14 @@ class StringMechaHyper:
         return value,
 
 
-def register_defaults_hyper_nodes():
+def register_components_params_nodes():
     for config in sd_mecha.extensions.model_config.get_all():
-        class_name = f"{config.identifier.upper()}DefaultsHyper"
-        title_name = f"{config.identifier} Default Params"
-        NODE_CLASS_MAPPINGS[title_name] = make_defaults_hyper_node_class(class_name, config)
+        class_name = f"{config.identifier.upper()}ComponentsParams"
+        title_name = f"{config.identifier} Components Params"
+        NODE_CLASS_MAPPINGS[title_name] = make_components_params_node_class(class_name, config)
 
 
-def make_defaults_hyper_node_class(class_name: str, config: sd_mecha.extensions.model_config.ModelConfig) -> type:
+def make_components_params_node_class(class_name: str, config: sd_mecha.extensions.model_config.ModelConfig) -> type:
     return type(class_name, (object,), {
         "INPUT_TYPES": lambda: {
             "required": {
@@ -123,7 +123,7 @@ def make_defaults_hyper_node_class(class_name: str, config: sd_mecha.extensions.
                         "max": 2**64,
                         "step": 0.01,
                     })
-                    for component in sorted(list(config.components))
+                    for component in list(config.components)
                 },
             },
         },
@@ -132,11 +132,11 @@ def make_defaults_hyper_node_class(class_name: str, config: sd_mecha.extensions.
         "FUNCTION": "execute",
         "OUTPUT_NODE": False,
         "CATEGORY": "advanced/model_merging/mecha",
-        "execute": get_defaults_hyper_node_execute(config),
+        "execute": get_components_params_node_execute(config),
     })
 
 
-def get_defaults_hyper_node_execute(config: sd_mecha.extensions.model_config.ModelConfig):
+def get_components_params_node_execute(config: sd_mecha.extensions.model_config.ModelConfig):
     def execute(self, **kwargs):
         return sd_mecha.literal(
             {
@@ -152,11 +152,13 @@ def get_defaults_hyper_node_execute(config: sd_mecha.extensions.model_config.Mod
 NODE_CLASS_MAPPINGS = {
     "Blocks Mecha Hyper": BlocksMechaHyper,
     "Float Mecha Hyper": FloatMechaHyper,
+    "String Mecha Hyper": StringMechaHyper,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Blocks Mecha Hyper": "Blocks",
     "Float Mecha Hyper": "Float",
+    "String Mecha Hyper": "String"
 }
 
-register_defaults_hyper_nodes()
+register_components_params_nodes()
