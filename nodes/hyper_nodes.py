@@ -1,6 +1,13 @@
 import sd_mecha
 
 
+BLOCK_CONFIGS = {
+    "sd1-ldm": sd_mecha.extensions.model_config.resolve("sd1_blocks-supermerger"),
+    "sdxl-sgm": sd_mecha.extensions.model_config.resolve("sdxl_blocks-supermerger"),
+}
+MAX_BLOCKS = max(len(config.keys) for config in BLOCK_CONFIGS.values())
+
+
 class BlocksMechaHyper:
     @classmethod
     def INPUT_TYPES(cls):
@@ -10,10 +17,7 @@ class BlocksMechaHyper:
                     "default": "custom",
                 }),
                 "blocks": ("STRING", {
-                    "default": "",
-                }),
-                "validate_num_blocks": ("BOOLEAN", {
-                    "default": True,
+                    "default": ","*(MAX_BLOCKS-1),
                 }),
                 "default": ("FLOAT", {
                     "default": 0.0,
@@ -21,15 +25,12 @@ class BlocksMechaHyper:
                     "max": 2**64,
                     "step": 0.01,
                 }),
-                "model_config": ([x.identifier for x in sd_mecha.extensions.model_config.get_all()],),
-                "model_component": (["unet", "clip_l", "clig_g", "t5xxl"], {
-                    "default": "unet",
-                }),
+                "model_config": (list(BLOCK_CONFIGS),),
             },
         }
 
-    RETURN_TYPES = ("MECHA_HYPER",)
-    RETURN_NAMES = ("hyper",)
+    RETURN_TYPES = ("MECHA_RECIPE",)
+    RETURN_NAMES = ("recipe",)
     FUNCTION = "execute"
     OUTPUT_NODE = False
     CATEGORY = "advanced/model_merging/mecha"
@@ -38,31 +39,21 @@ class BlocksMechaHyper:
         self,
         preset: str,
         blocks: str,
-        validate_num_blocks: bool,
         default: float,
         model_config: str,
-        model_component: str,
     ):
         if preset != "custom":
             blocks = ""
-            validate_num_blocks = True
             default = 0.0
 
-        try:
-            return sd_mecha.default(
-                model_config,
-                value=default,
-            ) | sd_mecha.blocks(
-                model_config,
-                model_component if model_component else None,
-                *((
-                      float(block.strip()) if block.strip() else default
-                      for block in blocks.split(",")
-                  ) if blocks.strip() else ()),
-                strict=validate_num_blocks,
-            ),
-        except ValueError as e:
-            raise ValueError(f"Wrong number of blocks for model architecture '{model_config}'") from e
+        block_config = BLOCK_CONFIGS[model_config]
+        return sd_mecha.convert(
+            {
+                block_name: float(block.strip()) if block.strip() else default
+                for block_name, block in zip(block_config.keys.keys(), blocks.split(","))
+            } if blocks.strip() else {},
+            model_config,
+        ) | default,
 
 
 class FloatMechaHyper:
@@ -79,8 +70,8 @@ class FloatMechaHyper:
             },
         }
 
-    RETURN_TYPES = ("MECHA_HYPER",)
-    RETURN_NAMES = ("hyper",)
+    RETURN_TYPES = ("MECHA_RECIPE",)
+    RETURN_NAMES = ("recipe",)
     FUNCTION = "execute"
     OUTPUT_NODE = False
     CATEGORY = "advanced/model_merging/mecha"
@@ -92,10 +83,32 @@ class FloatMechaHyper:
         return value,
 
 
+class StringMechaHyper:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "value": ("STRING",),
+            },
+        }
+
+    RETURN_TYPES = ("MECHA_RECIPE",)
+    RETURN_NAMES = ("recipe",)
+    FUNCTION = "execute"
+    OUTPUT_NODE = False
+    CATEGORY = "advanced/model_merging/mecha"
+
+    def execute(
+        self,
+        value: str,
+    ):
+        return value,
+
+
 def register_defaults_hyper_nodes():
     for config in sd_mecha.extensions.model_config.get_all():
         class_name = f"{config.identifier.upper()}DefaultsHyper"
-        title_name = f"{config.identifier} Defaults Hyper"
+        title_name = f"{config.identifier} Default Params"
         NODE_CLASS_MAPPINGS[title_name] = make_defaults_hyper_node_class(class_name, config)
 
 
@@ -114,8 +127,8 @@ def make_defaults_hyper_node_class(class_name: str, config: sd_mecha.extensions.
                 },
             },
         },
-        "RETURN_TYPES": ("MECHA_HYPER",),
-        "RETURN_NAMES": ("hyper",),
+        "RETURN_TYPES": ("MECHA_RECIPE",),
+        "RETURN_NAMES": ("recipe",),
         "FUNCTION": "execute",
         "OUTPUT_NODE": False,
         "CATEGORY": "advanced/model_merging/mecha",
@@ -125,10 +138,14 @@ def make_defaults_hyper_node_class(class_name: str, config: sd_mecha.extensions.
 
 def get_defaults_hyper_node_execute(config: sd_mecha.extensions.model_config.ModelConfig):
     def execute(self, **kwargs):
-        res = {}
-        for component in config.components:
-            res = res | sd_mecha.default(config.identifier, component, kwargs[component])
-        return res,
+        return sd_mecha.literal(
+            {
+                k: kwargs[component_id]
+                for component_id, component in config.components.items()
+                for k in component.keys
+            },
+            config.identifier,
+        ),
     return execute
 
 

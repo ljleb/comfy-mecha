@@ -7,7 +7,6 @@ import sd_mecha
 import torch.cuda
 import tqdm
 from sd_mecha.extensions.merge_method import MergeMethod
-from sd_mecha.extensions.merge_space import get_identifiers
 from sd_mecha.recipe_merger import LoadInputDictsVisitor, CloseInputDictsVisitor
 import folder_paths
 import comfy
@@ -358,36 +357,43 @@ def register_merge_methods():
 
 
 def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
-    all_hyper_names = sorted(list(method.get_hyper_names() - method.get_volatile_hyper_names()))
+    from sd_mecha.extensions.merge_space import get_identifiers
+    param_names = method.get_param_names()
+    merge_spaces = method.get_input_merge_spaces()
+    merge_spaces_dict = merge_spaces.as_dict(0)
+    default_args = method.get_default_args()
+    len_mandatory_args = len(param_names.args) - len(default_args.args)
+
     return type(class_name, (object,), {
         "INPUT_TYPES": lambda: {
             "required": {
                 **{
-                    f"{model_name} ({'|'.join(sd_mecha.extensions.merge_space.get_identifiers(merge_space))})": ("MECHA_RECIPE",)
-                    for model_name, merge_space in zip(sorted(method.get_input_names()), method.get_input_merge_spaces()[0])
+                    f"{name} ({'|'.join(sorted(get_identifiers(merge_spaces_dict[index])))})": ("MECHA_RECIPE",)
+                    for index, name in enumerate(param_names.args[:len_mandatory_args])
                 },
                 **{
-                    hyper_name: ("MECHA_HYPER",)
-                    for hyper_name in all_hyper_names
-                    if hyper_name not in method.get_default_hypers()
+                    f"{name} ({'|'.join(sorted(get_identifiers(merge_spaces_dict[index])))})": ("MECHA_RECIPE",)
+                    for index, name in sorted(param_names.kwargs.items(), key=lambda t: t[0])
+                    if index not in default_args.kwargs
                 },
-                "device": (["default", *get_all_torch_devices()], {
-                    "default": "default",
-                }),
-                "dtype": (list(OPTIONAL_DTYPE_MAPPING.keys()), {
-                    "default": "default",
-                }),
             },
             "optional": {
-                **({
-                    f"{method.get_input_varargs_name()} ({'|'.join(sorted(get_identifiers(method.get_input_merge_spaces()[1])))})": ("MECHA_RECIPE_LIST", {"default": []}),
-                } if method.get_input_varargs_name() is not None else {}),
                 **{
-                    f"{hyper_name} ({method.get_default_hypers()[hyper_name]})": ("MECHA_HYPER", {"default": method.get_default_hypers()[hyper_name]})
-                    for hyper_name in all_hyper_names
-                    if hyper_name in method.get_default_hypers()
+                    f"{name} ({default_args.args[default_index]})": ("MECHA_RECIPE", {"default": default_args.args[default_index]})
+                    for default_index, name in enumerate(param_names.args[len_mandatory_args:])
                 },
-            },
+                **{
+                    f"{name} ({default_args.kwargs[index]})": ("MECHA_RECIPE", {"default": default_args.kwargs[index]})
+                    for index, name in sorted(param_names.kwargs.items(), key=lambda t: t[0])
+                    if index in default_args.kwargs
+                },
+                **({
+                    f"{param_names.vararg} ({'|'.join(sorted(get_identifiers(merge_spaces.vararg)))})": ("MECHA_RECIPE_LIST", {"default": []}),
+                } if param_names.vararg is param_names.has_varargs() else {}),
+                "use_cache": ("BOOLEAN", {
+                    "default": False,
+                }),
+            }
         },
         "RETURN_TYPES": ("MECHA_RECIPE",),
         "RETURN_NAMES": ("recipe",),
@@ -438,12 +444,9 @@ def get_all_torch_devices() -> List[str]:
 
 
 def get_method_node_execute(method: MergeMethod):
-    def execute(*_args, **kwargs):
-        dtype = OPTIONAL_DTYPE_MAPPING[kwargs["dtype"]]
-        device = kwargs["device"]
-        if device == "default":
-            device = None
+    param_names = method.get_param_names()
 
+    def execute(*_args, **kwargs):
         # remove default values / merge space from keys
         # comfy nodes cannot distinguish display names from id names
         # in consequence we have to unmangle things here
@@ -453,17 +456,15 @@ def get_method_node_execute(method: MergeMethod):
                 kwargs[new_k] = kwargs[k]
                 del kwargs[k]
 
-        models = [kwargs[m] for m in method.get_input_names()]
-        if method.get_input_varargs_name() is not None:
-            models.extend(kwargs[method.get_input_varargs_name()])
-
-        hypers = {
+        args = [kwargs[m] for m in param_names.args]
+        if param_names.has_varargs():
+            args.extend(kwargs[param_names.vararg])
+        kwargs = {
             k: kwargs[k]
-            for k in method.get_hyper_names()
+            for k in param_names.kwargs
             if k in kwargs
         }
-
-        return method(*models, **hypers, dtype=dtype, device=device),
+        return method(*args, **kwargs),
 
     return execute
 
