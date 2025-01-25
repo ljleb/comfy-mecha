@@ -121,16 +121,16 @@ class MechaMerger:
                 "fallback_model": (["none"] + [f for f in folder_paths.get_filename_list("checkpoints") if f.endswith(".safetensors")], {
                     "default": "none",
                 }),
-                "default_merge_device": (all_torch_devices, {
+                "default_merge_device": (["none"] + all_torch_devices, {
                     "default": main_torch_device,
                 }),
-                "default_merge_dtype": (list(DTYPE_MAPPING.keys()), {
+                "default_merge_dtype": (["none"] + list(DTYPE_MAPPING.keys()), {
                     "default": "fp64",
                 }),
-                "output_device": (all_torch_devices, {
+                "output_device": (["none"] + all_torch_devices, {
                     "default": "cpu",
                 }),
-                "output_dtype": (list(DTYPE_MAPPING.keys()), {
+                "output_dtype": (["none"] + list(DTYPE_MAPPING.keys()), {
                     "default": "bf16",
                 }),
                 "total_buffer_size": ("STRING", {
@@ -202,8 +202,8 @@ class MechaMerger:
 
         merger = sd_mecha.RecipeMerger(
             models_dir=folder_paths.get_folder_paths("checkpoints") + folder_paths.get_folder_paths("loras"),
-            default_device=default_merge_device,
-            default_dtype=DTYPE_MAPPING[default_merge_dtype],
+            default_device=default_merge_device if default_merge_device != "none" else None,
+            default_dtype=DTYPE_MAPPING[default_merge_dtype] if default_merge_dtype != "none" else None,
             tqdm=ComfyTqdm,
         )
         state_dict = {}
@@ -212,8 +212,8 @@ class MechaMerger:
             recipe=recipe,
             output=state_dict,
             fallback_model=fallback_model,
-            save_dtype=DTYPE_MAPPING[output_dtype],
-            save_device=output_device,
+            save_device=output_device if output_device != "none" else None,
+            save_dtype=DTYPE_MAPPING[output_dtype] if output_dtype != "none" else None,
             threads=threads if threads >= 0 else None,
             total_buffer_size=total_buffer_size,
             strict_weight_space=strict_weight_space,
@@ -328,15 +328,9 @@ class MechaLoraRecipe:
             ))
 
             if recipe.model_config.identifier == "sdxl-kohya_kohya_lora":
-                convert_to_base = sd_mecha.extensions.merge_method.resolve("convert_'sdxl-kohya_kohya_lora'_to_base").create_recipe
-                convert_to_sgm = sd_mecha.extensions.merge_method.resolve("convert_'sdxl-kohya'_to_'sdxl-sgm'").create_recipe
-                convert_to_sgm_base = lambda *args, **kwargs: convert_to_sgm(convert_to_base(*args, **kwargs))
-                recipe = convert_to_sgm_base(recipe)
+                recipe = sd_mecha.convert(recipe, "sdxl-sgm")
             elif recipe.model_config.identifier == "sd1-kohya_kohya_lora":
-                convert_to_base = sd_mecha.extensions.merge_method.resolve("convert_'sd1-kohya_kohya_lora'_to_base").create_recipe
-                convert_to_ldm = sd_mecha.extensions.merge_method.resolve("convert_'sd1-kohya'_to_'sd1-ldm'").create_recipe
-                convert_to_ldm_base = lambda *args, **kwargs: convert_to_ldm(convert_to_base(*args, **kwargs))
-                recipe = convert_to_ldm_base(recipe)
+                recipe = sd_mecha.convert(recipe, "sd1-ldm")
             else:
                 raise RuntimeError(f"unsupported lora model config: {recipe.model_config.identifier}")
         finally:
@@ -463,7 +457,10 @@ def get_method_node_execute(method: MergeMethod):
             for k in param_names.kwargs
             if k in kwargs
         }
-        return method(*args, **kwargs),
+        recipe = method(*args, **kwargs)
+        if method.identifier == "add_difference":
+            recipe = recipe | args[0]
+        return recipe,
 
     return execute
 
@@ -489,14 +486,13 @@ def snake_case_to_title(name: str):
 
 
 DTYPE_MAPPING = {
+    "fp8_e4m3fn": torch.float8_e4m3fn,
+    "fp8_e5m2": torch.float8_e5m2,
     "bf16": torch.bfloat16,
     "fp16": torch.float16,
     "fp32": torch.float32,
     "fp64": torch.float64,
 }
-OPTIONAL_DTYPE_MAPPING = {
-    "default": None,
-} | DTYPE_MAPPING
 
 
 NODE_CLASS_MAPPINGS = {
