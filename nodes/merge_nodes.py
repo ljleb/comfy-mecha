@@ -6,7 +6,8 @@ from typing import List, Tuple, Iterable, Any, Optional
 import sd_mecha
 import torch.cuda
 import tqdm
-from sd_mecha.extensions.merge_method import MergeMethod
+from sd_mecha.extensions import merge_methods, merge_spaces
+from sd_mecha.extensions.merge_methods import MergeMethod
 from sd_mecha.recipe_merger import LoadInputDictsVisitor, CloseInputDictsVisitor, open_input_dicts
 import folder_paths
 import comfy
@@ -340,7 +341,7 @@ class MechaLoraRecipe:
 
 
 def register_merge_methods():
-    for method in sd_mecha.extensions.merge_method.get_all():
+    for method in merge_methods.get_all():
         method_name = method.get_identifier()
         class_name = f"{snake_case_to_upper(method_name)}MechaRecipe"
         short_title_name = snake_case_to_title(method_name)
@@ -350,10 +351,9 @@ def register_merge_methods():
 
 
 def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
-    from sd_mecha.extensions.merge_space import get_identifiers
     param_names = method.get_param_names()
-    merge_spaces = method.get_input_merge_spaces()
-    merge_spaces_dict = merge_spaces.as_dict(0)
+    input_merge_spaces = method.get_input_merge_spaces()
+    merge_spaces_dict = input_merge_spaces.as_dict(0)
     default_args = method.get_default_args()
     len_mandatory_args = len(param_names.args) - len(default_args.args)
 
@@ -361,11 +361,11 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
         "INPUT_TYPES": lambda: {
             "required": {
                 **{
-                    f"{name} ({'|'.join(sorted(get_identifiers(merge_spaces_dict[index])))})": ("MECHA_RECIPE",)
+                    f"{name} ({'|'.join(sorted(merge_spaces.get_identifiers(merge_spaces_dict[index])))})": ("MECHA_RECIPE",)
                     for index, name in enumerate(param_names.args[:len_mandatory_args])
                 },
                 **{
-                    f"{name} ({'|'.join(sorted(get_identifiers(merge_spaces_dict[index])))})": ("MECHA_RECIPE",)
+                    f"{name} ({'|'.join(sorted(merge_spaces.get_identifiers(merge_spaces_dict[index])))})": ("MECHA_RECIPE",)
                     for index, name in sorted(param_names.kwargs.items(), key=lambda t: t[0])
                     if index not in default_args.kwargs
                 },
@@ -381,9 +381,9 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
                     if index in default_args.kwargs
                 },
                 **({
-                    f"{param_names.vararg} ({'|'.join(sorted(get_identifiers(merge_spaces.vararg)))})": ("MECHA_RECIPE_LIST", {"default": []}),
-                } if param_names.vararg is param_names.has_varargs() else {}),
-                "use_cache": ("BOOLEAN", {
+                    f"{param_names.vararg} ({'|'.join(sorted(merge_spaces.get_identifiers(input_merge_spaces.vararg)))})": ("MECHA_RECIPE_LIST", {"default": []}),
+                } if param_names.has_varargs() else {}),
+                "_use_cache": ("BOOLEAN", {
                     "default": False,
                 }),
             }
@@ -449,6 +449,8 @@ def get_method_node_execute(method: MergeMethod):
                 kwargs[new_k] = kwargs[k]
                 del kwargs[k]
 
+        use_cache = kwargs.pop("_use_cache")
+
         args = [kwargs[m] for m in param_names.args]
         if param_names.has_varargs():
             args.extend(kwargs[param_names.vararg])
@@ -460,6 +462,9 @@ def get_method_node_execute(method: MergeMethod):
         recipe = method(*args, **kwargs)
         if method.identifier == "add_difference":
             recipe = recipe | args[0]
+
+        if use_cache:
+            recipe.set_cache()
         return recipe,
 
     return execute

@@ -1,9 +1,9 @@
 import sd_mecha
-
+from sd_mecha.extensions import model_configs
 
 BLOCK_CONFIGS = {
-    "sd1-ldm": sd_mecha.extensions.model_config.resolve("sd1_blocks-supermerger"),
-    "sdxl-sgm": sd_mecha.extensions.model_config.resolve("sdxl_blocks-supermerger"),
+    "sd1-ldm": model_configs.resolve("sd1_blocks-supermerger"),
+    "sdxl-sgm": model_configs.resolve("sdxl_blocks-supermerger"),
 }
 MAX_BLOCKS = max(len(config.keys) for config in BLOCK_CONFIGS.values())
 
@@ -106,13 +106,13 @@ class StringMechaHyper:
 
 
 def register_components_params_nodes():
-    for config in sd_mecha.extensions.model_config.get_all():
+    for config in model_configs.get_all():
         class_name = f"{config.identifier.upper()}ComponentsParams"
         title_name = f"{config.identifier} Components Params"
         NODE_CLASS_MAPPINGS[title_name] = make_components_params_node_class(class_name, config)
 
 
-def make_components_params_node_class(class_name: str, config: sd_mecha.extensions.model_config.ModelConfig) -> type:
+def make_components_params_node_class(class_name: str, config: model_configs.ModelConfig) -> type:
     return type(class_name, (object,), {
         "INPUT_TYPES": lambda: {
             "required": {
@@ -136,7 +136,7 @@ def make_components_params_node_class(class_name: str, config: sd_mecha.extensio
     })
 
 
-def get_components_params_node_execute(config: sd_mecha.extensions.model_config.ModelConfig):
+def get_components_params_node_execute(config: model_configs.ModelConfig):
     def execute(self, **kwargs):
         return sd_mecha.literal(
             {

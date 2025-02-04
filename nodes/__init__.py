@@ -1,5 +1,5 @@
 from . import merge_nodes
-from . import hyper_nodes
+from . import parameter_nodes
 
 NODE_CLASS_MAPPINGS = (
     merge_nodes.NODE_CLASS_MAPPINGS |
