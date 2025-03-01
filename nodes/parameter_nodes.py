@@ -1,3 +1,6 @@
+import functools
+import operator
+
 import sd_mecha
 from sd_mecha.extensions import model_configs
 
@@ -121,6 +124,7 @@ def make_components_params_node_class(class_name: str, config: model_configs.Mod
                         "default": 0.0,
                         "min": -2**64,
                         "max": 2**64,
+                        "step": 0.01,
                     })
                     for component in list(config.components)
                 },
@@ -137,14 +141,11 @@ def make_components_params_node_class(class_name: str, config: model_configs.Mod
 
 def get_components_params_node_execute(config: model_configs.ModelConfig):
     def execute(self, **kwargs):
-        return sd_mecha.literal(
-            {
-                k: kwargs[component_id]
-                for component_id, component in config.components.items()
-                for k in component.keys
-            },
-            config.identifier,
-        ),
+        recipes = [
+            sd_mecha.pick_component(sd_mecha.literal(kwargs[component_id], config), component_id)
+            for component_id, component in config.components.items()
+        ]
+        return functools.reduce(operator.or_, recipes),
     return execute
 
 

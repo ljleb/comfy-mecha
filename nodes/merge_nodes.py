@@ -434,8 +434,9 @@ def get_all_torch_devices() -> List[str]:
 
 def get_method_node_execute(method: MergeMethod):
     param_names = method.get_param_names()
-    defaults = method.get_default_args()
-    reversed_default_args = list(reversed(defaults.args))
+    # todo: fix optional args
+    # defaults = method.get_default_args()
+    # reversed_default_args = list(reversed(defaults.args))
 
     def execute(*_args, **kwargs):
         # remove default values / merge space from keys
