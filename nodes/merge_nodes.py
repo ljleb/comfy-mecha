@@ -1,19 +1,19 @@
+import comfy
+import execution
+import folder_paths
 import functools
 import gc
 import pathlib
 import re
-from typing import List, Tuple, Iterable, Any, Optional
 import sd_mecha
 import torch.cuda
 import tqdm
+from sd_mecha import open_input_dicts
 from sd_mecha.extensions import merge_methods, merge_spaces
 from sd_mecha.extensions.merge_methods import MergeMethod
-from sd_mecha.recipe_merger import LoadInputDictsVisitor, CloseInputDictsVisitor, open_input_dicts
-import folder_paths
-import comfy
 from comfy import model_management
 from comfy.sd import load_state_dict_guess_config
-import execution
+from typing import List, Tuple, Iterable, Any, Optional
 
 
 temporary_merged_recipes: List[Tuple[str, Iterable[Any]]] = []
@@ -199,25 +199,21 @@ class MechaMerger:
         if fallback_model == "none" or not model_config:
             fallback_model = None
         else:
-            fallback_model = sd_mecha.model(fallback_model, model_config=model_config)
+            fallback_model = sd_mecha.model(fallback_model, config=model_config)
 
-        merger = sd_mecha.RecipeMerger(
-            models_dir=folder_paths.get_folder_paths("checkpoints") + folder_paths.get_folder_paths("loras"),
-            default_device=default_merge_device if default_merge_device != "none" else None,
-            default_dtype=DTYPE_MAPPING[default_merge_dtype] if default_merge_dtype != "none" else None,
-            tqdm=ComfyTqdm,
-        )
-        state_dict = {}
         model_management.unload_all_models()
-        merger.merge_and_save(
+        state_dict = sd_mecha.merge(
             recipe=recipe,
-            output=state_dict,
             fallback_model=fallback_model,
-            save_device=output_device if output_device != "none" else None,
-            save_dtype=DTYPE_MAPPING[output_dtype] if output_dtype != "none" else None,
+            merge_device=default_merge_device if default_merge_device != "none" else None,
+            merge_dtype=DTYPE_MAPPING[default_merge_dtype] if default_merge_dtype != "none" else None,
+            output_device=output_device if output_device != "none" else None,
+            output_dtype=DTYPE_MAPPING[output_dtype] if output_dtype != "none" else None,
             threads=threads if threads >= 0 else None,
             total_buffer_size=total_buffer_size,
+            model_dirs=map(pathlib.Path, folder_paths.get_folder_paths("checkpoints") + folder_paths.get_folder_paths("loras")),
             strict_weight_space=strict_weight_space,
+            tqdm=ComfyTqdm,
         )
         res = load_state_dict_guess_config(state_dict, embedding_directory=folder_paths.get_folder_paths("embeddings"))[:3]
         if temporary_merge:
@@ -266,6 +262,12 @@ class ComfyTqdm:
     def update(self):
         self.progress.update()
         self.comfy_progress.update_absolute(self.progress.n, self.progress.total)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.progress.close()
 
     def __getattr__(self, item):
         try:
@@ -322,20 +324,14 @@ class MechaLoraRecipe:
         model_path: str,
     ):
         recipe = sd_mecha.model(model_path)
-        try:
-            recipe.accept(LoadInputDictsVisitor(
-                [pathlib.Path(p) for p in folder_paths.get_folder_paths("loras")],
-                0,
-            ))
-
+        lora_dirs = map(pathlib.Path, folder_paths.get_folder_paths("loras"))
+        with open_input_dicts(recipe, lora_dirs):
             if recipe.model_config.identifier == "sdxl-kohya_kohya_lora":
                 recipe = sd_mecha.convert(recipe, "sdxl-sgm")
             elif recipe.model_config.identifier == "sd1-kohya_kohya_lora":
                 recipe = sd_mecha.convert(recipe, "sd1-ldm")
             else:
                 raise RuntimeError(f"unsupported lora model config: {recipe.model_config.identifier}")
-        finally:
-            recipe.accept(CloseInputDictsVisitor())
 
         return recipe,
 
@@ -438,6 +434,8 @@ def get_all_torch_devices() -> List[str]:
 
 def get_method_node_execute(method: MergeMethod):
     param_names = method.get_param_names()
+    defaults = method.get_default_args()
+    reversed_default_args = list(reversed(defaults.args))
 
     def execute(*_args, **kwargs):
         # remove default values / merge space from keys

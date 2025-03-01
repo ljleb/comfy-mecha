@@ -1,9 +1,10 @@
 import sd_mecha
 from sd_mecha.extensions import model_configs
 
+
 BLOCK_CONFIGS = {
-    "sd1-ldm": model_configs.resolve("sd1_blocks-supermerger"),
-    "sdxl-sgm": model_configs.resolve("sdxl_blocks-supermerger"),
+    "sd1-ldm": model_configs.resolve("sd1-supermerger_blocks"),
+    "sdxl-sgm": model_configs.resolve("sdxl-supermerger_blocks"),
 }
 MAX_BLOCKS = max(len(config.keys) for config in BLOCK_CONFIGS.values())
 
@@ -23,7 +24,6 @@ class BlocksMechaHyper:
                     "default": 0.0,
                     "min": -2**64,
                     "max": 2**64,
-                    "step": 0.01,
                 }),
                 "model_config": (list(BLOCK_CONFIGS),),
             },
@@ -121,7 +121,6 @@ def make_components_params_node_class(class_name: str, config: model_configs.Mod
                         "default": 0.0,
                         "min": -2**64,
                         "max": 2**64,
-                        "step": 0.01,
                     })
                     for component in list(config.components)
                 },
