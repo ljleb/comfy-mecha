@@ -9,7 +9,7 @@ BLOCK_CONFIGS = {
     "sd1-ldm": model_configs.resolve("sd1-supermerger_blocks"),
     "sdxl-sgm": model_configs.resolve("sdxl-supermerger_blocks"),
 }
-MAX_BLOCKS = max(len(config.keys) for config in BLOCK_CONFIGS.values())
+MAX_BLOCKS = max(len(config.keys()) for config in BLOCK_CONFIGS.values())
 
 
 class BlocksMechaHyper:
@@ -126,7 +126,7 @@ def make_components_params_node_class(class_name: str, config: model_configs.Mod
                         "max": 2**64,
                         "step": 0.01,
                     })
-                    for component in list(config.components)
+                    for component in list(config.components())
                 },
             },
         },
@@ -143,7 +143,7 @@ def get_components_params_node_execute(config: model_configs.ModelConfig):
     def execute(self, **kwargs):
         recipes = [
             sd_mecha.pick_component(sd_mecha.literal(kwargs[component_id], config), component_id)
-            for component_id, component in config.components.items()
+            for component_id, component in config.components().items()
         ]
         return functools.reduce(operator.or_, recipes),
     return execute

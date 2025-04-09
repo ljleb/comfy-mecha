@@ -450,17 +450,9 @@ def get_method_node_execute(method: MergeMethod):
 
         use_cache = kwargs.pop("_use_cache")
 
-        args = [kwargs[m] for m in param_names.args]
-        if param_names.has_varargs():
-            args.extend(kwargs[param_names.vararg])
-        kwargs = {
-            k: kwargs[k]
-            for k in param_names.kwargs
-            if k in kwargs
-        }
-        recipe = method(*args, **kwargs)
-        if method.identifier == "add_difference":
-            recipe = recipe | args[0]
+        recipe = method(**kwargs)
+        if method.identifier == "add_difference" and "a" in kwargs:
+            recipe = recipe | kwargs["a"]
 
         if use_cache:
             recipe.set_cache()
