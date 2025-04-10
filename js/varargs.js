@@ -58,6 +58,21 @@ function handleMechaHyperBlocksListVisibility(node, preset) {
     node.setSize([node.size[0], newHeight]);
 }
 
+function handleMechaConverterVisibility(node, config_from_recipe_link) {
+    if (node.origWidgets === undefined) {
+        node.origWidgets = node.widgets;
+    }
+
+    if (config_from_recipe_link !== null) {
+        node.widgets = [];
+    } else {
+        node.widgets = node.origWidgets;
+    }
+
+    const newHeight = node.computeSize()[1];
+    node.setSize([node.size[0], newHeight]);
+}
+
 function handleMechaModelListVisibilityByCount(node, widget) {
     handleMechaModelListVisibility(node, widget.value);
 }
@@ -66,10 +81,21 @@ function handleMechaHyperBlocksVisibilityByPreset(node, widget) {
     handleMechaHyperBlocksListVisibility(node, widget.value);
 }
 
+function handleMechaConverterVisibilityByConnection(node, input) {
+    handleMechaConverterVisibility(node, input.link);
+}
+
 function widgetLogic(node, widget) {
-    const handler = nodeWidgetHandlers[node.comfyClass]?.[widget.name];
+    let handler = nodeWidgetHandlers[node.comfyClass]?.[widget.name];
     if (handler) {
         handler(node, widget);
+    }
+}
+
+function inputLogic(node, input) {
+    let handler = nodeInputHandlers[node.comfyClass]?.[input.name];
+    if (handler) {
+        handler(node, input);
     }
 }
 
@@ -79,6 +105,12 @@ const nodeWidgetHandlers = {
     },
     "Blocks Mecha Hyper": {
         "preset": handleMechaHyperBlocksVisibilityByPreset
+    },
+};
+
+const nodeInputHandlers = {
+    "Mecha Converter": {
+        "config_from_recipe": handleMechaConverterVisibilityByConnection
     },
 };
 
@@ -129,6 +161,27 @@ app.registerExtension({
 		            }
 		        }
 		    }
-		}
+
+            let inputLink = iv.link;
+            let originalDescriptor = Object.getOwnPropertyDescriptor(iv, 'link');
+            inputLogic(node, iv);
+
+            Object.defineProperty(iv, 'link', {
+                get() {
+                    return originalDescriptor && originalDescriptor.get
+                        ? originalDescriptor.get.call(iv)
+                        : inputLink;
+                },
+                set(newVal) {
+                    if (originalDescriptor && originalDescriptor.set) {
+                        originalDescriptor.set.call(iv, newVal);
+                    } else {
+                        inputLink = newVal;
+                    }
+
+                    inputLogic(node, iv);
+                }
+            });
+        }
 	},
 });

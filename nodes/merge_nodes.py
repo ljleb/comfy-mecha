@@ -81,9 +81,7 @@ class MechaSerializer:
     def execute(self, recipe):
         with open_input_dicts(
             recipe,
-            [pathlib.Path(p) for p in
-             folder_paths.get_folder_paths("checkpoints") + folder_paths.get_folder_paths("loras")],
-            buffer_size_per_dict=0,
+            map(pathlib.Path, folder_paths.get_folder_paths("checkpoints") + folder_paths.get_folder_paths("loras")),
         ):
             return sd_mecha.serialize(recipe),
 
@@ -109,6 +107,37 @@ class MechaDeserializer:
 
     def execute(self, recipe_txt: str):
         return sd_mecha.deserialize(recipe_txt.split("\n")),
+
+
+class MechaConverter:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "recipe": ("MECHA_RECIPE",),
+            },
+            "optional": {
+                "config_from_recipe": ("MECHA_RECIPE",),
+                "target_config": ([c.identifier for c in sd_mecha.extensions.model_configs.get_all()],),
+            }
+        }
+
+    RETURN_TYPES = "MECHA_RECIPE",
+    RETURN_NAMES = "recipe",
+    FUNCTION = "execute"
+    OUTPUT_NODE = False
+    CATEGORY = "advanced/model_merging/mecha"
+
+    def execute(self, recipe: str, **kwargs):
+        if "config_from_recipe" in kwargs:
+            config_object = kwargs["config_from_recipe"]
+        else:
+            config_object = kwargs["target_config"]
+        return sd_mecha.convert(
+            recipe,
+            config_object,
+            model_dirs=map(pathlib.Path, folder_paths.get_folder_paths("checkpoints") + folder_paths.get_folder_paths("loras")),
+        ),
 
 
 class MechaMerger:
@@ -183,8 +212,7 @@ class MechaMerger:
 
         with open_input_dicts(
             recipe,
-            [pathlib.Path(p) for p in folder_paths.get_folder_paths("checkpoints") + folder_paths.get_folder_paths("loras")],
-            buffer_size_per_dict=0,
+            map(pathlib.Path, folder_paths.get_folder_paths("checkpoints") + folder_paths.get_folder_paths("loras")),
         ):
             recipe_txt = sd_mecha.serialize(recipe)
 
@@ -495,6 +523,7 @@ NODE_CLASS_MAPPINGS = {
     "Mecha Merger": MechaMerger,
     "Mecha Serializer": MechaSerializer,
     "Mecha Deserializer": MechaDeserializer,
+    "Mecha Converter": MechaConverter,
     "Model Mecha Recipe": MechaModelRecipe,
     "Lora Mecha Recipe": MechaLoraRecipe,
     "Mecha Recipe List": MechaRecipeList,
@@ -504,6 +533,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Mecha Merger": "Merger",
     "Mecha Serializer": "Serializer",
     "Mecha Deserializer": "Deserializer",
+    "Mecha Converter": "Converter",
     "Model Mecha Recipe": "Model",
     "Lora Mecha Recipe": "Lora",
     "Mecha Recipe List": "Recipe List",
