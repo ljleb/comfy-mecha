@@ -132,7 +132,7 @@ class MechaMerger:
                     "default": "cpu",
                 }),
                 "output_dtype": (["none"] + list(DTYPE_MAPPING.keys()), {
-                    "default": "bf16",
+                    "default": "fp16",
                 }),
                 "total_buffer_size": ("STRING", {
                     "default": "0.5G",
