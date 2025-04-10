@@ -58,12 +58,12 @@ function handleMechaHyperBlocksListVisibility(node, preset) {
     node.setSize([node.size[0], newHeight]);
 }
 
-function handleMechaConverterVisibility(node, config_from_recipe_link) {
+function handleMechaConverterVisibility(node, input_link) {
     if (node.origWidgets === undefined) {
         node.origWidgets = node.widgets;
     }
 
-    if (config_from_recipe_link !== null) {
+    if (input_link !== null) {
         node.widgets = [];
     } else {
         node.widgets = node.origWidgets;
@@ -110,7 +110,7 @@ const nodeWidgetHandlers = {
 
 const nodeInputHandlers = {
     "Mecha Converter": {
-        "config_from_recipe": handleMechaConverterVisibilityByConnection
+        "target_config_from_recipe_override": handleMechaConverterVisibilityByConnection
     },
 };
 

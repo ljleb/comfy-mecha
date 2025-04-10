@@ -81,7 +81,7 @@ class MechaSerializer:
     def execute(self, recipe):
         with open_input_dicts(
             recipe,
-            map(pathlib.Path, folder_paths.get_folder_paths("checkpoints") + folder_paths.get_folder_paths("loras")),
+            get_all_folder_paths(),
         ):
             return sd_mecha.serialize(recipe),
 
@@ -117,7 +117,7 @@ class MechaConverter:
                 "recipe": ("MECHA_RECIPE",),
             },
             "optional": {
-                "config_from_recipe": ("MECHA_RECIPE",),
+                "target_config_from_recipe_override": ("MECHA_RECIPE",),
                 "target_config": ([c.identifier for c in sd_mecha.extensions.model_configs.get_all()],),
             }
         }
@@ -129,14 +129,19 @@ class MechaConverter:
     CATEGORY = "advanced/model_merging/mecha"
 
     def execute(self, recipe: str, **kwargs):
-        if "config_from_recipe" in kwargs:
-            config_object = kwargs["config_from_recipe"]
-        else:
+        if "target_config_from_recipe_override" in kwargs:
+            config_object = kwargs["target_config_from_recipe_override"]
+        elif "target_config" in kwargs:
             config_object = kwargs["target_config"]
+        else:
+            raise ValueError(
+                "Neither 'target_config_from_recipe_override' nor 'target_config' are in kwargs. "
+                f"This shouldn't ever happen but if it somehow does, here are the kwargs: {kwargs}"
+            )
         return sd_mecha.convert(
             recipe,
             config_object,
-            model_dirs=map(pathlib.Path, folder_paths.get_folder_paths("checkpoints") + folder_paths.get_folder_paths("loras")),
+            model_dirs=get_all_folder_paths(),
         ),
 
 
@@ -212,7 +217,7 @@ class MechaMerger:
 
         with open_input_dicts(
             recipe,
-            map(pathlib.Path, folder_paths.get_folder_paths("checkpoints") + folder_paths.get_folder_paths("loras")),
+            get_all_folder_paths(),
         ):
             recipe_txt = sd_mecha.serialize(recipe)
 
@@ -239,7 +244,7 @@ class MechaMerger:
             output_dtype=DTYPE_MAPPING[output_dtype] if output_dtype != "none" else None,
             threads=threads if threads >= 0 else None,
             total_buffer_size=total_buffer_size,
-            model_dirs=map(pathlib.Path, folder_paths.get_folder_paths("checkpoints") + folder_paths.get_folder_paths("loras")),
+            model_dirs=get_all_folder_paths(),
             strict_weight_space=strict_weight_space,
             tqdm=ComfyTqdm,
         )
@@ -352,7 +357,7 @@ class MechaLoraRecipe:
         model_path: str,
     ):
         recipe = sd_mecha.model(model_path)
-        lora_dirs = map(pathlib.Path, folder_paths.get_folder_paths("loras"))
+        lora_dirs = [pathlib.Path(p) for p in folder_paths.get_folder_paths("loras")]
         with open_input_dicts(recipe, lora_dirs):
             if recipe.model_config.identifier == "sdxl-kohya_kohya_lora":
                 recipe = sd_mecha.convert(recipe, "sdxl-sgm")
@@ -507,6 +512,22 @@ def snake_case_to_title(name: str):
         i += 1
 
     return name[:1].upper() + name[1:]
+
+
+def get_all_folder_paths():
+    return [
+        pathlib.Path(p)
+        for item in ("checkpoints", "loras", "clip", "unet", "vae", "controlnet", "upscale_models")
+        for p in folder_paths.get_folder_paths(item)
+    ]
+
+
+def get_all_filenames():
+    return [
+        pathlib.Path(p)
+        for item in ("checkpoints", "loras", "clip", "unet", "vae", "controlnet", "upscale_models")
+        for p in folder_paths.get_filename_list(item)
+    ]
 
 
 DTYPE_MAPPING = {
