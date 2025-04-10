@@ -321,6 +321,7 @@ class MechaModelRecipe:
                         if f.endswith(".safetensors")
                     ],
                 ),
+                # todo: optional model config dropdown to override the automatic inference mechanism
             },
         }
 
@@ -335,6 +336,9 @@ class MechaModelRecipe:
         model_path: str,
     ):
         return sd_mecha.model(model_path),
+
+
+# todo: recipe from already loaded model
 
 
 class MechaLoraRecipe:
