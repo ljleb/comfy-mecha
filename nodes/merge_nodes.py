@@ -470,11 +470,6 @@ def get_all_torch_devices() -> List[str]:
 
 
 def get_method_node_execute(method: MergeMethod):
-    param_names = method.get_param_names()
-    # todo: fix optional args
-    # defaults = method.get_default_args()
-    # reversed_default_args = list(reversed(defaults.args))
-
     def execute(*_args, **kwargs):
         # remove default values / merge space from keys
         # comfy nodes cannot distinguish display names from id names
@@ -482,8 +477,7 @@ def get_method_node_execute(method: MergeMethod):
         for k in list(kwargs):
             if " (" in k and k.endswith(")"):
                 new_k = k.split(" ")[0]
-                kwargs[new_k] = kwargs[k]
-                del kwargs[k]
+                kwargs[new_k] = kwargs.pop(k)
 
         use_cache = kwargs.pop("_use_cache")
 
@@ -523,14 +517,6 @@ def get_all_folder_paths():
         pathlib.Path(p)
         for item in ("checkpoints", "loras", "clip", "unet", "vae", "controlnet", "upscale_models")
         for p in folder_paths.get_folder_paths(item)
-    ]
-
-
-def get_all_filenames():
-    return [
-        pathlib.Path(p)
-        for item in ("checkpoints", "loras", "clip", "unet", "vae", "controlnet", "upscale_models")
-        for p in folder_paths.get_filename_list(item)
     ]
 
 

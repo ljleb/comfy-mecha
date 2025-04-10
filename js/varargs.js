@@ -86,14 +86,14 @@ function handleMechaConverterVisibilityByConnection(node, input) {
 }
 
 function widgetLogic(node, widget) {
-    let handler = nodeWidgetHandlers[node.comfyClass]?.[widget.name];
+    const handler = nodeWidgetHandlers[node.comfyClass]?.[widget.name];
     if (handler) {
         handler(node, widget);
     }
 }
 
 function inputLogic(node, input) {
-    let handler = nodeInputHandlers[node.comfyClass]?.[input.name];
+    const handler = nodeInputHandlers[node.comfyClass]?.[input.name];
     if (handler) {
         handler(node, input);
     }
