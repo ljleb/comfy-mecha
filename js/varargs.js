@@ -140,27 +140,27 @@ app.registerExtension({
             });
         }
     },
-	async beforeRegisterNodeDef(nodeType, nodeData, app) {
-	    if (nodeData.output[0] === "MECHA_RECIPE" && nodeData.input && nodeData.input.required) {
-	        for (const ik in nodeData.input.required) {
-	            if (nodeData.input.required[ik][0] === "MECHA_RECIPE" || nodeData.input.required[ik][0] === "MECHA_RECIPE_LIST") {
-	                if (!(nodeData.display_name in customDefInputNames)) {
-	                    customDefInputNames[nodeData.display_name] = [];
-	                }
+    async beforeRegisterNodeDef(nodeType, nodeData, app) {
+        if (nodeData.output[0] === "MECHA_RECIPE" && nodeData.input && nodeData.input.required) {
+            for (const ik in nodeData.input.required) {
+                if (nodeData.input.required[ik][0] === "MECHA_RECIPE" || nodeData.input.required[ik][0] === "MECHA_RECIPE_LIST") {
+                    if (!(nodeData.display_name in customDefInputNames)) {
+                        customDefInputNames[nodeData.display_name] = [];
+                    }
                     customDefInputNames[nodeData.display_name].push(ik);
-	            }
-	        }
+                }
+            }
         }
-	},
-	loadedGraphNode(node, app) {
-		for (const iv of node.inputs || []) {
-		    if (iv.type === "MECHA_RECIPE" || iv.type === "MECHA_RECIPE_LIST") {
-		        for (const ik of customDefInputNames[node.title] || []) {
-		            if (ik.split(" ")[0] === iv.name.split(" ")[0]) {
-		                iv.name = ik;
-		            }
-		        }
-		    }
+    },
+    loadedGraphNode(node, app) {
+        for (const iv of node.inputs || []) {
+            if (iv.type === "MECHA_RECIPE" || iv.type === "MECHA_RECIPE_LIST") {
+                for (const ik of customDefInputNames[node.title] || []) {
+                    if (ik.split(" ")[0] === iv.name.split(" ")[0]) {
+                        iv.name = ik;
+                    }
+                }
+            }
 
             let inputLink = iv.link;
             let originalDescriptor = Object.getOwnPropertyDescriptor(iv, 'link');
@@ -183,5 +183,5 @@ app.registerExtension({
                 }
             });
         }
-	},
+    },
 });
