@@ -1,1 +1,1 @@
-sd-mecha>=0.1.0rc5
+sd-mecha>=0.1.0rc6
