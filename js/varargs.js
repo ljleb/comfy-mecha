@@ -58,12 +58,31 @@ function handleMechaHyperBlocksListVisibility(node, preset) {
     node.setSize([node.size[0], newHeight]);
 }
 
+function handleMechaConverterVisibility(node, input_link) {
+    if (node.origWidgets === undefined) {
+        node.origWidgets = node.widgets;
+    }
+
+    if (input_link !== null) {
+        node.widgets = [];
+    } else {
+        node.widgets = node.origWidgets;
+    }
+
+    const newHeight = node.computeSize()[1];
+    node.setSize([node.size[0], newHeight]);
+}
+
 function handleMechaModelListVisibilityByCount(node, widget) {
     handleMechaModelListVisibility(node, widget.value);
 }
 
 function handleMechaHyperBlocksVisibilityByPreset(node, widget) {
     handleMechaHyperBlocksListVisibility(node, widget.value);
+}
+
+function handleMechaConverterVisibilityByConnection(node, input) {
+    handleMechaConverterVisibility(node, input.link);
 }
 
 function widgetLogic(node, widget) {
@@ -73,12 +92,25 @@ function widgetLogic(node, widget) {
     }
 }
 
+function inputLogic(node, input) {
+    const handler = nodeInputHandlers[node.comfyClass]?.[input.name];
+    if (handler) {
+        handler(node, input);
+    }
+}
+
 const nodeWidgetHandlers = {
     "Mecha Recipe List": {
         "count": handleMechaModelListVisibilityByCount
     },
     "Blocks Mecha Hyper": {
         "preset": handleMechaHyperBlocksVisibilityByPreset
+    },
+};
+
+const nodeInputHandlers = {
+    "Mecha Converter": {
+        "target_config_from_recipe_override": handleMechaConverterVisibilityByConnection
     },
 };
 
@@ -108,27 +140,48 @@ app.registerExtension({
             });
         }
     },
-	async beforeRegisterNodeDef(nodeType, nodeData, app) {
-	    if (nodeData.output[0] === "MECHA_RECIPE" && nodeData.input && nodeData.input.required) {
-	        for (const ik in nodeData.input.required) {
-	            if (nodeData.input.required[ik][0] === "MECHA_RECIPE" || nodeData.input.required[ik][0] === "MECHA_RECIPE_LIST") {
-	                if (!(nodeData.display_name in customDefInputNames)) {
-	                    customDefInputNames[nodeData.display_name] = [];
-	                }
+    async beforeRegisterNodeDef(nodeType, nodeData, app) {
+        if (nodeData.output[0] === "MECHA_RECIPE" && nodeData.input && nodeData.input.required) {
+            for (const ik in nodeData.input.required) {
+                if (nodeData.input.required[ik][0] === "MECHA_RECIPE" || nodeData.input.required[ik][0] === "MECHA_RECIPE_LIST") {
+                    if (!(nodeData.display_name in customDefInputNames)) {
+                        customDefInputNames[nodeData.display_name] = [];
+                    }
                     customDefInputNames[nodeData.display_name].push(ik);
-	            }
-	        }
+                }
+            }
         }
-	},
-	loadedGraphNode(node, app) {
-		for (const iv of node.inputs || []) {
-		    if (iv.type === "MECHA_RECIPE" || iv.type === "MECHA_RECIPE_LIST") {
-		        for (const ik of customDefInputNames[node.title] || []) {
-		            if (ik.split(" ")[0] === iv.name.split(" ")[0]) {
-		                iv.name = ik;
-		            }
-		        }
-		    }
-		}
-	},
+    },
+    loadedGraphNode(node, app) {
+        for (const iv of node.inputs || []) {
+            if (iv.type === "MECHA_RECIPE" || iv.type === "MECHA_RECIPE_LIST") {
+                for (const ik of customDefInputNames[node.title] || []) {
+                    if (ik.split(" ")[0] === iv.name.split(" ")[0]) {
+                        iv.name = ik;
+                    }
+                }
+            }
+
+            let inputLink = iv.link;
+            let originalDescriptor = Object.getOwnPropertyDescriptor(iv, 'link');
+            inputLogic(node, iv);
+
+            Object.defineProperty(iv, 'link', {
+                get() {
+                    return originalDescriptor && originalDescriptor.get
+                        ? originalDescriptor.get.call(iv)
+                        : inputLink;
+                },
+                set(newVal) {
+                    if (originalDescriptor && originalDescriptor.set) {
+                        originalDescriptor.set.call(iv, newVal);
+                    } else {
+                        inputLink = newVal;
+                    }
+
+                    inputLogic(node, iv);
+                }
+            });
+        }
+    },
 });

@@ -1,16 +1,19 @@
+import comfy
+import execution
+import folder_paths
 import functools
 import gc
+import pathlib
 import re
-from typing import Optional, List, Tuple, Any, Iterable
 import sd_mecha
 import torch.cuda
 import tqdm
-from sd_mecha.extensions.merge_method import MergeMethod
-import folder_paths
-import comfy
+from sd_mecha import open_input_dicts
+from sd_mecha.extensions import merge_methods, merge_spaces
+from sd_mecha.extensions.merge_methods import MergeMethod
 from comfy import model_management
 from comfy.sd import load_state_dict_guess_config
-import execution
+from typing import List, Tuple, Iterable, Any, Optional
 
 
 temporary_merged_recipes: List[Tuple[str, Iterable[Any]]] = []
@@ -76,7 +79,11 @@ class MechaSerializer:
     CATEGORY = "advanced/model_merging/mecha"
 
     def execute(self, recipe):
-        return sd_mecha.serialize(recipe),
+        with open_input_dicts(
+            recipe,
+            get_all_folder_paths(),
+        ):
+            return sd_mecha.serialize(recipe),
 
 
 class MechaDeserializer:
@@ -98,8 +105,44 @@ class MechaDeserializer:
     OUTPUT_NODE = False
     CATEGORY = "advanced/model_merging/mecha"
 
-    def execute(self, recipe_txt):
+    def execute(self, recipe_txt: str):
         return sd_mecha.deserialize(recipe_txt.split("\n")),
+
+
+class MechaConverter:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "recipe": ("MECHA_RECIPE",),
+            },
+            "optional": {
+                "target_config_from_recipe_override": ("MECHA_RECIPE",),
+                "target_config": ([c.identifier for c in sd_mecha.extensions.model_configs.get_all()],),
+            }
+        }
+
+    RETURN_TYPES = "MECHA_RECIPE",
+    RETURN_NAMES = "recipe",
+    FUNCTION = "execute"
+    OUTPUT_NODE = False
+    CATEGORY = "advanced/model_merging/mecha"
+
+    def execute(self, recipe: str, **kwargs):
+        if "target_config_from_recipe_override" in kwargs:
+            config_object = kwargs["target_config_from_recipe_override"]
+        elif "target_config" in kwargs:
+            config_object = kwargs["target_config"]
+        else:
+            raise ValueError(
+                "Neither 'target_config_from_recipe_override' nor 'target_config' are in kwargs. "
+                f"This shouldn't ever happen but if it somehow does, here are the kwargs: {kwargs}"
+            )
+        return sd_mecha.convert(
+            recipe,
+            config_object,
+            model_dirs=get_all_folder_paths(),
+        ),
 
 
 class MechaMerger:
@@ -113,24 +156,24 @@ class MechaMerger:
                 "fallback_model": (["none"] + [f for f in folder_paths.get_filename_list("checkpoints") if f.endswith(".safetensors")], {
                     "default": "none",
                 }),
-                "default_merge_device": (all_torch_devices, {
+                "default_merge_device": (["none"] + all_torch_devices, {
                     "default": main_torch_device,
                 }),
-                "default_merge_dtype": (list(DTYPE_MAPPING.keys()), {
+                "default_merge_dtype": (["none"] + list(DTYPE_MAPPING.keys()), {
                     "default": "fp64",
                 }),
-                "output_device": (all_torch_devices, {
+                "output_device": (["none"] + all_torch_devices, {
                     "default": "cpu",
                 }),
-                "output_dtype": (list(DTYPE_MAPPING.keys()), {
+                "output_dtype": (["none"] + list(DTYPE_MAPPING.keys()), {
                     "default": "fp16",
                 }),
                 "total_buffer_size": ("STRING", {
                     "default": "0.5G",
                 }),
                 "threads": ("INT", {
-                    "default": 0,
-                    "min": 0,
+                    "default": -1,
+                    "min": -1,
                     "max": 16,
                     "step": 1,
                 }),
@@ -142,6 +185,7 @@ class MechaMerger:
                 })
             },
         }
+
     RETURN_TYPES = ("MODEL", "CLIP", "VAE", "STRING")
     RETURN_NAMES = ("MODEL", "CLIP", "VAE", "recipe_txt")
     FUNCTION = "execute"
@@ -171,40 +215,38 @@ class MechaMerger:
         global temporary_merged_recipes, prompt_executor
         total_buffer_size = memory_to_bytes(total_buffer_size)
 
-        recipe_txt = sd_mecha.serialize(recipe)
+        with open_input_dicts(
+            recipe,
+            get_all_folder_paths(),
+        ):
+            recipe_txt = sd_mecha.serialize(recipe)
+
         try:
             already_merged_index = [t[0] for t in temporary_merged_recipes].index(recipe_txt)
-            already_merged_recipe = temporary_merged_recipes[already_merged_index]
+            return temporary_merged_recipes[already_merged_index][1]
         except ValueError:
-            already_merged_recipe = None
-        if already_merged_recipe is not None:
-            return already_merged_recipe[1]
-        if temporary_merged_recipes and already_merged_recipe is None:
-            free_temporary_merges(prompt_executor)
+            if temporary_merged_recipes:
+                free_temporary_merges(prompt_executor)
 
-        model_arch = getattr(recipe.model_arch, "identifier", None)
-        if fallback_model == "none" or not model_arch:
+        model_config = getattr(recipe.model_config, "identifier", None)
+        if fallback_model == "none" or not model_config:
             fallback_model = None
         else:
-            fallback_model = sd_mecha.model(fallback_model, model_arch=model_arch)
+            fallback_model = sd_mecha.model(fallback_model, config=model_config)
 
-        merger = sd_mecha.RecipeMerger(
-            models_dir=folder_paths.get_folder_paths("checkpoints") + folder_paths.get_folder_paths("loras"),
-            default_device=default_merge_device,
-            default_dtype=DTYPE_MAPPING[default_merge_dtype],
-            tqdm=ComfyTqdm,
-        )
-        state_dict = {}
         model_management.unload_all_models()
-        merger.merge_and_save(
+        state_dict = sd_mecha.merge(
             recipe=recipe,
-            output=state_dict,
             fallback_model=fallback_model,
-            save_dtype=DTYPE_MAPPING[output_dtype],
-            save_device=output_device,
-            threads=threads if threads > 0 else None,
+            merge_device=default_merge_device if default_merge_device != "none" else None,
+            merge_dtype=DTYPE_MAPPING[default_merge_dtype] if default_merge_dtype != "none" else None,
+            output_device=output_device if output_device != "none" else None,
+            output_dtype=DTYPE_MAPPING[output_dtype] if output_dtype != "none" else None,
+            threads=threads if threads >= 0 else None,
             total_buffer_size=total_buffer_size,
+            model_dirs=get_all_folder_paths(),
             strict_weight_space=strict_weight_space,
+            tqdm=ComfyTqdm,
         )
         res = load_state_dict_guess_config(state_dict, embedding_directory=folder_paths.get_folder_paths("embeddings"))[:3]
         if temporary_merge:
@@ -254,6 +296,12 @@ class ComfyTqdm:
         self.progress.update()
         self.comfy_progress.update_absolute(self.progress.n, self.progress.total)
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.progress.close()
+
     def __getattr__(self, item):
         try:
             return self.__dict__[item]
@@ -266,10 +314,17 @@ class MechaModelRecipe:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "model_path": ([f for f in folder_paths.get_filename_list("checkpoints") if f.endswith(".safetensors")],),
-                "model_arch": (sd_mecha.extensions.model_arch.get_all(),),
+                "model_path": (
+                    [
+                        f
+                        for f in folder_paths.get_filename_list("checkpoints") + folder_paths.get_filename_list("loras")
+                        if f.endswith(".safetensors")
+                    ],
+                ),
+                # todo: optional model config dropdown to override the automatic inference mechanism
             },
         }
+
     RETURN_TYPES = ("MECHA_RECIPE",)
     RETURN_NAMES = ("recipe",)
     FUNCTION = "execute"
@@ -279,9 +334,11 @@ class MechaModelRecipe:
     def execute(
         self,
         model_path: str,
-        model_arch: str,
     ):
-        return sd_mecha.model(model_path, model_arch=model_arch),
+        return sd_mecha.model(model_path),
+
+
+# todo: recipe from already loaded model
 
 
 class MechaLoraRecipe:
@@ -290,9 +347,9 @@ class MechaLoraRecipe:
         return {
             "required": {
                 "model_path": ([f for f in folder_paths.get_filename_list("loras") if f.endswith(".safetensors")],),
-                "model_arch": (sd_mecha.extensions.model_arch.get_all(),),
             },
         }
+
     RETURN_TYPES = ("MECHA_RECIPE",)
     RETURN_NAMES = ("recipe",)
     FUNCTION = "execute"
@@ -302,15 +359,23 @@ class MechaLoraRecipe:
     def execute(
         self,
         model_path: str,
-        model_arch: str,
     ):
-        return sd_mecha.lora(model_path, model_arch=model_arch),
+        recipe = sd_mecha.model(model_path)
+        lora_dirs = [pathlib.Path(p) for p in folder_paths.get_folder_paths("loras")]
+        with open_input_dicts(recipe, lora_dirs):
+            if recipe.model_config.identifier == "sdxl-kohya_kohya_lora":
+                recipe = sd_mecha.convert(recipe, "sdxl-sgm")
+            elif recipe.model_config.identifier == "sd1-kohya_kohya_lora":
+                recipe = sd_mecha.convert(recipe, "sd1-ldm")
+            else:
+                raise RuntimeError(f"unsupported lora model config: {recipe.model_config.identifier}")
+
+        return recipe,
 
 
 def register_merge_methods():
-    for method_name in sd_mecha.extensions.merge_method._merge_methods_registry:
-        method = sd_mecha.extensions.merge_method.resolve(method_name)
-
+    for method in merge_methods.get_all():
+        method_name = method.get_identifier()
         class_name = f"{snake_case_to_upper(method_name)}MechaRecipe"
         short_title_name = snake_case_to_title(method_name)
         title_name = f"{snake_case_to_title(method_name)} Mecha Recipe"
@@ -319,36 +384,42 @@ def register_merge_methods():
 
 
 def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
-    all_hyper_names = sorted(list(method.get_hyper_names() - method.get_volatile_hyper_names()))
+    param_names = method.get_param_names()
+    input_merge_spaces = method.get_input_merge_spaces()
+    merge_spaces_dict = input_merge_spaces.as_dict(0)
+    default_args = method.get_default_args()
+    len_mandatory_args = len(param_names.args) - len(default_args.args)
+
     return type(class_name, (object,), {
         "INPUT_TYPES": lambda: {
             "required": {
                 **{
-                    f"{model_name} ({merge_space})": ("MECHA_RECIPE",)
-                    for model_name, merge_space in zip(sorted(method.get_model_names()), method.get_input_merge_spaces()[0])
+                    f"{name} ({'|'.join(sorted(merge_spaces.get_identifiers(merge_spaces_dict[index])))})": ("MECHA_RECIPE",)
+                    for index, name in enumerate(param_names.args[:len_mandatory_args])
                 },
                 **{
-                    hyper_name: ("MECHA_HYPER",)
-                    for hyper_name in all_hyper_names
-                    if hyper_name not in method.get_default_hypers()
+                    f"{name} ({'|'.join(sorted(merge_spaces.get_identifiers(merge_spaces_dict[index])))})": ("MECHA_RECIPE",)
+                    for index, name in sorted(param_names.kwargs.items(), key=lambda t: t[0])
+                    if index not in default_args.kwargs
                 },
-                "device": (["default", *get_all_torch_devices()], {
-                    "default": "default",
-                }),
-                "dtype": (list(OPTIONAL_DTYPE_MAPPING.keys()), {
-                    "default": "default",
-                }),
             },
             "optional": {
-                **({
-                    f"{method.get_model_varargs_name()} ({method.get_input_merge_spaces()[1]})": ("MECHA_RECIPE_LIST", {"default": []}),
-                } if method.get_model_varargs_name() is not None else {}),
                 **{
-                    f"{hyper_name} ({method.get_default_hypers()[hyper_name]})": ("MECHA_HYPER", {"default": method.get_default_hypers()[hyper_name]})
-                    for hyper_name in all_hyper_names
-                    if hyper_name in method.get_default_hypers()
+                    f"{name} ({default_args.args[default_index]})": ("MECHA_RECIPE", {"default": default_args.args[default_index]})
+                    for default_index, name in enumerate(param_names.args[len_mandatory_args:])
                 },
-            },
+                **{
+                    f"{name} ({default_args.kwargs[index]})": ("MECHA_RECIPE", {"default": default_args.kwargs[index]})
+                    for index, name in sorted(param_names.kwargs.items(), key=lambda t: t[0])
+                    if index in default_args.kwargs
+                },
+                **({
+                    f"{param_names.vararg} ({'|'.join(sorted(merge_spaces.get_identifiers(input_merge_spaces.vararg)))})": ("MECHA_RECIPE_LIST", {"default": []}),
+                } if param_names.has_varargs() else {}),
+                "_use_cache": ("BOOLEAN", {
+                    "default": False,
+                }),
+            }
         },
         "RETURN_TYPES": ("MECHA_RECIPE",),
         "RETURN_NAMES": ("recipe",),
@@ -374,6 +445,7 @@ class MechaRecipeList:
                 for i in range(MAX_VARARGS_MODELS)
             }
         }
+
     RETURN_TYPES = ("MECHA_RECIPE_LIST",)
     RETURN_NAMES = ("recipes",)
     FUNCTION = "execute"
@@ -398,32 +470,39 @@ def get_all_torch_devices() -> List[str]:
 
 
 def get_method_node_execute(method: MergeMethod):
-    def execute(*_args, **kwargs):
-        dtype = OPTIONAL_DTYPE_MAPPING[kwargs["dtype"]]
-        device = kwargs["device"]
-        if device == "default":
-            device = None
+    param_names = method.get_param_names()
+    param_defaults = method.get_default_args()
 
+    num_mandatory_args = len(param_names.args) - len(param_defaults.args)
+
+    def execute(*_args, **kwargs):
         # remove default values / merge space from keys
         # comfy nodes cannot distinguish display names from id names
         # in consequence we have to unmangle things here
         for k in list(kwargs):
             if " (" in k and k.endswith(")"):
                 new_k = k.split(" ")[0]
-                kwargs[new_k] = kwargs[k]
-                del kwargs[k]
+                kwargs[new_k] = kwargs.pop(k)
 
-        models = [kwargs[m] for m in method.get_model_names()]
-        if method.get_model_varargs_name() is not None:
-            models.extend(kwargs[method.get_model_varargs_name()])
+        # private key for caching
+        use_cache = kwargs.pop("_use_cache")
 
-        hypers = {
-            k: kwargs[k]
-            for k in method.get_hyper_names()
-            if k in kwargs
-        }
+        args = [
+            kwargs.pop(k)
+            if i < num_mandatory_args else
+            kwargs.pop(k, param_defaults.args[i - num_mandatory_args])
+            for i, k in enumerate(param_names.args)
+        ]
+        if param_names.has_varargs():
+            args += kwargs.pop(param_names.vararg, ())
 
-        return method.create_recipe(*models, **hypers, dtype=dtype, device=device),
+        recipe = method(*args, **kwargs)
+        if method.identifier == "add_difference" and "a" in kwargs:
+            recipe = recipe | kwargs["a"]
+
+        if use_cache:
+            recipe.set_cache()
+        return recipe,
 
     return execute
 
@@ -448,21 +527,29 @@ def snake_case_to_title(name: str):
     return name[:1].upper() + name[1:]
 
 
+def get_all_folder_paths():
+    return [
+        pathlib.Path(p)
+        for item in ("checkpoints", "loras", "clip", "unet", "vae", "controlnet", "upscale_models")
+        for p in folder_paths.get_folder_paths(item)
+    ]
+
+
 DTYPE_MAPPING = {
+    "fp8_e4m3fn": torch.float8_e4m3fn,
+    "fp8_e5m2": torch.float8_e5m2,
     "bf16": torch.bfloat16,
     "fp16": torch.float16,
     "fp32": torch.float32,
     "fp64": torch.float64,
 }
-OPTIONAL_DTYPE_MAPPING = {
-    "default": None,
-} | DTYPE_MAPPING
 
 
 NODE_CLASS_MAPPINGS = {
     "Mecha Merger": MechaMerger,
     "Mecha Serializer": MechaSerializer,
     "Mecha Deserializer": MechaDeserializer,
+    "Mecha Converter": MechaConverter,
     "Model Mecha Recipe": MechaModelRecipe,
     "Lora Mecha Recipe": MechaLoraRecipe,
     "Mecha Recipe List": MechaRecipeList,
@@ -472,7 +559,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Mecha Merger": "Merger",
     "Mecha Serializer": "Serializer",
     "Mecha Deserializer": "Deserializer",
-    "Mecha Model Recipe": "Model",
+    "Mecha Converter": "Converter",
+    "Model Mecha Recipe": "Model",
     "Lora Mecha Recipe": "Lora",
     "Mecha Recipe List": "Recipe List",
 }
