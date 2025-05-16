@@ -470,6 +470,11 @@ def get_all_torch_devices() -> List[str]:
 
 
 def get_method_node_execute(method: MergeMethod):
+    param_names = method.get_param_names()
+    param_defaults = method.get_default_args()
+
+    num_mandatory_args = len(param_names.args) - len(param_defaults.args)
+
     def execute(*_args, **kwargs):
         # remove default values / merge space from keys
         # comfy nodes cannot distinguish display names from id names
@@ -479,9 +484,19 @@ def get_method_node_execute(method: MergeMethod):
                 new_k = k.split(" ")[0]
                 kwargs[new_k] = kwargs.pop(k)
 
+        # private key for caching
         use_cache = kwargs.pop("_use_cache")
 
-        recipe = method(**kwargs)
+        args = [
+            kwargs.pop(k)
+            if i < num_mandatory_args else
+            kwargs.pop(k, param_defaults.args[i - num_mandatory_args])
+            for i, k in enumerate(param_names.args)
+        ]
+        if param_names.has_varargs():
+            args += kwargs.pop(param_names.vararg, ())
+
+        recipe = method(*args, **kwargs)
         if method.identifier == "add_difference" and "a" in kwargs:
             recipe = recipe | kwargs["a"]
 
