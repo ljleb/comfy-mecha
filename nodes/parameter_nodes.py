@@ -113,7 +113,7 @@ class BoolMechaHyper:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "value": ("STRING",),
+                "value": ("BOOL",),
             },
         }
 
@@ -125,7 +125,7 @@ class BoolMechaHyper:
 
     def execute(
         self,
-        value: str,
+        value: bool,
     ):
         return value,
 
