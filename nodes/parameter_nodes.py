@@ -53,7 +53,7 @@ class BlocksMechaHyper:
         return sd_mecha.convert(
             {
                 block_name: float(block.strip()) if block.strip() else default
-                for block_name, block in zip(block_config.keys.keys(), blocks.split(","))
+                for block_name, block in zip(block_config.keys(), blocks.split(","))
             } if blocks.strip() else {},
             model_config,
         ) | default,
@@ -87,6 +87,28 @@ class FloatMechaHyper:
 
 
 class StringMechaHyper:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "value": ("STRING",),
+            },
+        }
+
+    RETURN_TYPES = ("MECHA_RECIPE",)
+    RETURN_NAMES = ("recipe",)
+    FUNCTION = "execute"
+    OUTPUT_NODE = False
+    CATEGORY = "advanced/model_merging/mecha"
+
+    def execute(
+        self,
+        value: str,
+    ):
+        return value,
+
+
+class BoolMechaHyper:
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -153,12 +175,14 @@ NODE_CLASS_MAPPINGS = {
     "Blocks Mecha Hyper": BlocksMechaHyper,
     "Float Mecha Hyper": FloatMechaHyper,
     "String Mecha Hyper": StringMechaHyper,
+    "Bool Mecha Hyper": BoolMechaHyper,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Blocks Mecha Hyper": "Blocks",
     "Float Mecha Hyper": "Float",
-    "String Mecha Hyper": "String"
+    "String Mecha Hyper": "String",
+    "Bool Mecha Hyper": "Bool",
 }
 
 register_components_params_nodes()
