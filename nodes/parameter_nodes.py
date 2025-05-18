@@ -113,7 +113,7 @@ class BoolMechaHyper:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "value": ("BOOL",),
+                "value": ("BOOLEAN",),
             },
         }
 
