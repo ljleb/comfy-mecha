@@ -73,22 +73,22 @@ function handleMechaConverterVisibility(node, input_link) {
     node.setSize([node.size[0], newHeight]);
 }
 
-function handleMechaModelListVisibilityByCount(node, widget) {
-    handleMechaModelListVisibility(node, widget.value);
+function handleMechaModelListVisibilityByCount(node, value) {
+    handleMechaModelListVisibility(node, value);
 }
 
-function handleMechaHyperBlocksVisibilityByPreset(node, widget) {
-    handleMechaHyperBlocksListVisibility(node, widget.value);
+function handleMechaHyperBlocksVisibilityByPreset(node, value) {
+    handleMechaHyperBlocksListVisibility(node, value);
 }
 
 function handleMechaConverterVisibilityByConnection(node, input) {
     handleMechaConverterVisibility(node, input.link);
 }
 
-function widgetLogic(node, widget) {
+function widgetLogic(node, widget, value) {
     const handler = nodeWidgetHandlers[node.comfyClass]?.[widget.name];
     if (handler) {
-        handler(node, widget);
+        handler(node, value);
     }
 }
 
@@ -118,26 +118,13 @@ app.registerExtension({
     name: "mecha.widgethider",
     nodeCreated(node) {
         for (const w of node.widgets || []) {
-            let widgetValue = w.value;
-            let originalDescriptor = Object.getOwnPropertyDescriptor(w, 'value');
-            widgetLogic(node, w);
+            widgetLogic(node, w, w.value);
 
-            Object.defineProperty(w, 'value', {
-                get() {
-                    return originalDescriptor && originalDescriptor.get
-                        ? originalDescriptor.get.call(w)
-                        : widgetValue;
-                },
-                set(newVal) {
-                    if (originalDescriptor && originalDescriptor.set) {
-                        originalDescriptor.set.call(w, newVal);
-                    } else {
-                        widgetValue = newVal;
-                    }
-
-                    widgetLogic(node, w);
-                }
-            });
+            const original_callback = w.callback?.bind(w);
+            w.callback = (value) => {
+                original_callback?.(value);
+                widgetLogic(node, w, value);
+            }
         }
     },
     async beforeRegisterNodeDef(nodeType, nodeData, app) {
