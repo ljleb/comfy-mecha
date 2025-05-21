@@ -139,6 +139,9 @@ def register_components_params_nodes():
         title_name = f"{identifier.upper()} Defaults Hyper"
         NODE_CLASS_MAPPINGS[title_name] = make_components_params_node_class(class_name, config)
 
+        display_name = f"{config.identifier.upper()} Components Params"
+        NODE_DISPLAY_NAME_MAPPINGS[title_name] = display_name
+
 
 def make_components_params_node_class(class_name: str, config: model_configs.ModelConfig) -> type:
     return type(class_name, (object,), {
