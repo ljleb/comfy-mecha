@@ -215,11 +215,14 @@ class MechaMerger:
         global temporary_merged_recipes, prompt_executor
         total_buffer_size = memory_to_bytes(total_buffer_size)
 
-        with open_input_dicts(
-            recipe,
-            get_all_folder_paths(),
-        ):
-            recipe_txt = sd_mecha.serialize(recipe)
+        try:
+            with open_input_dicts(
+                recipe,
+                get_all_folder_paths(),
+            ):
+                recipe_txt = sd_mecha.serialize(recipe)
+        except TypeError:
+            recipe_txt = str(id(recipe))
 
         try:
             already_merged_index = [t[0] for t in temporary_merged_recipes].index(recipe_txt)
@@ -228,11 +231,10 @@ class MechaMerger:
             if temporary_merged_recipes:
                 free_temporary_merges(prompt_executor)
 
-        model_config = getattr(recipe.model_config, "identifier", None)
-        if fallback_model == "none" or not model_config:
+        if fallback_model == "none":
             fallback_model = None
         else:
-            fallback_model = sd_mecha.model(fallback_model, config=model_config)
+            fallback_model = sd_mecha.model(fallback_model)
 
         model_management.unload_all_models()
         state_dict = sd_mecha.merge(
@@ -309,6 +311,11 @@ class ComfyTqdm:
             return getattr(self.progress, item)
 
 
+MERGE_SPACES_OPTIONAL_INPUT_TYPE = ["default"] + [
+    m.identifier for m in sd_mecha.extensions.merge_spaces.get_all()
+]
+
+
 class MechaModelRecipe:
     @classmethod
     def INPUT_TYPES(cls):
@@ -321,8 +328,12 @@ class MechaModelRecipe:
                         if f.endswith(".safetensors")
                     ],
                 ),
-                # todo: optional model config dropdown to override the automatic inference mechanism
             },
+            "optional": {
+                "merge_space": (MERGE_SPACES_OPTIONAL_INPUT_TYPE, {
+                    "default": "default",
+                })
+            }
         }
 
     RETURN_TYPES = ("MECHA_RECIPE",)
@@ -334,11 +345,50 @@ class MechaModelRecipe:
     def execute(
         self,
         model_path: str,
+        merge_space: str,
     ):
-        return sd_mecha.model(model_path),
+        if merge_space == "default":
+            merge_space = None
+        return sd_mecha.model(model_path, merge_space=merge_space),
 
 
-# todo: recipe from already loaded model
+class MechaAlreadyLoadedModelRecipe:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "model": ("MODEL",),
+            },
+            "optional": {
+                "clip": ("CLIP",),
+                "vae": ("VAE",),
+            },
+        }
+
+    RETURN_TYPES = ("MECHA_RECIPE",)
+    RETURN_NAMES = ("recipe",)
+    FUNCTION = "execute"
+    OUTPUT_NODE = False
+    CATEGORY = "advanced/model_merging/mecha"
+
+    def execute(
+        self,
+        model: comfy.model_patcher.ModelPatcher,
+        clip: comfy.sd.CLIP = None,
+        vae: comfy.sd.VAE = None
+    ):
+        clip_sd = None
+        load_models = [model]
+        if clip is not None:
+            load_models.append(clip.load_model())
+            clip_sd = clip.get_sd()
+        vae_sd = None
+        if vae is not None:
+            vae_sd = vae.get_sd()
+
+        model_management.load_models_gpu(load_models, force_patch_weights=True)
+        sd = model.model.state_dict_for_saving(clip_sd, vae_sd, None)
+        return sd_mecha.model(sd),
 
 
 class MechaLoraRecipe:
@@ -551,6 +601,7 @@ NODE_CLASS_MAPPINGS = {
     "Mecha Deserializer": MechaDeserializer,
     "Mecha Converter": MechaConverter,
     "Model Mecha Recipe": MechaModelRecipe,
+    "Already Loaded Model Mecha Recipe": MechaAlreadyLoadedModelRecipe,
     "Lora Mecha Recipe": MechaLoraRecipe,
     "Mecha Recipe List": MechaRecipeList,
 }
@@ -561,6 +612,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Mecha Deserializer": "Deserializer",
     "Mecha Converter": "Converter",
     "Model Mecha Recipe": "Model",
+    "Already Loaded Model Mecha Recipe": "Already Loaded Model",
     "Lora Mecha Recipe": "Lora",
     "Mecha Recipe List": "Recipe List",
 }
