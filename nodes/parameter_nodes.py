@@ -132,8 +132,11 @@ class BoolMechaHyper:
 
 def register_components_params_nodes():
     for config in model_configs.get_all():
-        class_name = f"{config.identifier.upper()}ComponentsParams"
-        title_name = f"{config.identifier} Components Params"
+        identifier = config.identifier
+        if identifier in ["sdxl-sgm", "sd1-ldm"]:  # for backwards compatibility
+            identifier = identifier.split("-")[0]
+        class_name = f"{identifier.upper()}DefaultsHyper"
+        title_name = f"{identifier.upper()} Defaults Hyper"
         NODE_CLASS_MAPPINGS[title_name] = make_components_params_node_class(class_name, config)
 
 
