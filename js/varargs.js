@@ -120,7 +120,7 @@ app.registerExtension({
         for (const w of node.widgets || []) {
             widgetLogic(node, w, w.value);
 
-            const original_callback = w.callback?.bind(w);
+            const original_callback = w.callback?.bind?.(w);
             w.callback = (value) => {
                 original_callback?.(value);
                 widgetLogic(node, w, value);
