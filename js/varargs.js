@@ -161,7 +161,7 @@ app.registerExtension({
 
         for (const iv of (node.inputs || []).slice()) {
             if (iv.type === "MECHA_RECIPE" || iv.type === "MECHA_RECIPE_LIST") {
-                iv.name = (customDefInputNames[node.type] || {})[iv.name.split(" ")[0]] || iv.name;
+                iv.name = iv.name.split(" ")[0];
             }
 
             let inputLink = iv.link;
