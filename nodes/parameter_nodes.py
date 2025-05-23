@@ -133,7 +133,7 @@ class BoolMechaHyper:
 def register_components_params_nodes():
     for config in model_configs.get_all():
         identifier = config.identifier
-        if identifier in ["sdxl-sgm", "sd1-ldm"]:  # for backwards compatibility
+        if identifier in ["sdxl-sgm", "sd1-ldm", "flux-flux"]:  # for backwards compatibility
             identifier = identifier.split("-")[0]
         class_name = f"{identifier.upper()}DefaultsHyper"
         title_name = f"{identifier.upper()} Defaults Hyper"

@@ -460,6 +460,10 @@ def register_merge_methods():
         method_name = method.get_identifier()
         class_name = f"{snake_case_to_upper(method_name)}MechaRecipe"
         short_title_name = snake_case_to_title(method_name)
+
+        if method_name == "model_stock":
+            method_name = "model_stock_for_tensor"
+
         title_name = f"{snake_case_to_title(method_name)} Mecha Recipe"
         NODE_CLASS_MAPPINGS[title_name] = make_comfy_node_class(class_name, method)
         NODE_DISPLAY_NAME_MAPPINGS[title_name] = short_title_name
