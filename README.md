@@ -2,7 +2,7 @@
 
 # sd-mecha for Comfyui
 
-comfy-mecha is a complete model merging node pack for ComfyUI with a focus on low memory footprint.  
+comfy-mecha is a complete model merging nodepack for ComfyUI with a focus on low memory footprint.  
 - compose complex recipes without needing to save dozens of intermediate merges to disk
 - merge loras to models
 - support for block weights
@@ -57,21 +57,21 @@ Nodes used for merging. They all have `Recipe` in their name except for `Mecha M
 - `Mecha Merger` takes a `MECHA_RECIPE` as input, and returns a unet and a text encoder
 - `Serializer` takes a `MECHA_RECIPE` as input, and returns the recipe instructions using the mecha format
 - `Deserializer` takes a mecha recipe string as input, and returns the deserialized `MECHA_RECIPE` (this is the inverse operation of `Serializer`)
-- `Mecha Model Recipe` loads a model as a recipe to be used as input to other recipe nodes. model architecture auto-detection is not yet supported, so please make sure the right `model_arch` parameter is selected!
-- `Mecha Lora Recipe` loads a lora model as a recipe to be used as input to other recipe nodes. again, model architecture auto-detection is not yet supported, so make sure to use the right `model_arch`
+- `Mecha Model Recipe` loads a model as a recipe to be used as input to other recipe nodes.
+- `Mecha Lora Recipe` loads a lora model as a recipe to be used as input to other recipe nodes.
 - `Mecha Recipe List` takes an arbitrary number of recipes and returns a `MECHA_RECIPE_LIST`. It is intended to be used as input to recipe nodes that accept an arbitrary number of recipes as input, i.e. the `bounds` input of `Clip Mecha Recipe`
 
-### Hyper nodes
+### Param Nodes
 
-Nodes used to specify hyper(parameters) to merge methods. For example, `Weighted Sum Mecha Recipe` has a hyper input `alpha` with a default value of `0.5`.
+Nodes used to specify parameters to merge methods. For example, `Weighted Sum Mecha Recipe` has a param input `alpha` with a default value of `0.5`.
 
-- `Blocks Mecha Hyper` can specify a different hyper for each block of the models to be merged (AKA "merge block weighted" or "MBW")
-- `Float Mecha Hyper` specifies the same float for all blocks of the models to be merged
+- `Blocks Mecha Params` can specify a different parameter for each block of the models to be merged (A.K.A. "merge block weighted")
+- `Float Mecha Params` specifies the same float for all keys of the models to be merged
 
 ## Extensions
 
 To add custom merge nodes, you can add python scripts that make use of the mecha extension API under the `mecha_extensions` directory.
-The node pack will run all scripts placed there before creating the comfy nodes.
+The nodepack will run all scripts placed there and turn them into Comfy nodes.
 
 Currently, the documentation for the mecha extension API is under construction.
 For now, to get more information, you can either take a look at the [custom merge method example](https://github.com/ljleb/sd-mecha/blob/main/examples/custom_merge_method.py),
