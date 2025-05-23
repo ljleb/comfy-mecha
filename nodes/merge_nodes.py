@@ -348,7 +348,7 @@ class MechaModelRecipe:
         merge_space: str,
     ):
         if merge_space == "default":
-            merge_space = None
+            merge_space = "weight"
         return sd_mecha.model(model_path, merge_space=merge_space),
 
 
