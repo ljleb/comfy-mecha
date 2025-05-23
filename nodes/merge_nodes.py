@@ -324,6 +324,34 @@ class MechaModelRecipe:
                 "model_path": (
                     [
                         f
+                        for f in folder_paths.get_filename_list("checkpoints")
+                        if f.endswith(".safetensors")
+                    ],
+                ),
+            },
+        }
+
+    RETURN_TYPES = ("MECHA_RECIPE",)
+    RETURN_NAMES = ("recipe",)
+    FUNCTION = "execute"
+    OUTPUT_NODE = False
+    CATEGORY = "advanced/model_merging/mecha"
+
+    def execute(
+        self,
+        model_path: str,
+    ):
+        return sd_mecha.model(model_path),
+
+
+class MechaAnyModelRecipe:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "model_path": (
+                    [
+                        f
                         for f in folder_paths.get_filename_list("checkpoints") + folder_paths.get_filename_list("loras")
                         if f.endswith(".safetensors")
                     ],
@@ -424,7 +452,11 @@ class MechaLoraRecipe:
 
 
 def register_merge_methods():
+    converter_ids = [m.identifier for m in merge_methods.get_all_converters()]
     for method in merge_methods.get_all():
+        if method.identifier in converter_ids:
+            continue
+
         method_name = method.get_identifier()
         class_name = f"{snake_case_to_upper(method_name)}MechaRecipe"
         short_title_name = snake_case_to_title(method_name)
@@ -601,6 +633,7 @@ NODE_CLASS_MAPPINGS = {
     "Mecha Deserializer": MechaDeserializer,
     "Mecha Converter": MechaConverter,
     "Model Mecha Recipe": MechaModelRecipe,
+    "Any Model Mecha Recipe": MechaAnyModelRecipe,
     "Already Loaded Model Mecha Recipe": MechaAlreadyLoadedModelRecipe,
     "Lora Mecha Recipe": MechaLoraRecipe,
     "Mecha Recipe List": MechaRecipeList,
@@ -612,6 +645,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Mecha Deserializer": "Deserializer",
     "Mecha Converter": "Converter",
     "Model Mecha Recipe": "Model",
+    "Any Model Mecha Recipe": "Any Model",
     "Already Loaded Model Mecha Recipe": "Already Loaded Model",
     "Lora Mecha Recipe": "Lora",
     "Mecha Recipe List": "Recipe List",
