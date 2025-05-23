@@ -144,15 +144,15 @@ app.registerExtension({
         for (const iv of (node.inputs || []).slice()) {
             const iv_idx = node.inputs.indexOf(iv);
             if (iv.type === "MECHA_RECIPE" || iv.type === "MECHA_RECIPE_LIST" || iv.type === "MECHA_HYPER") {
-                console.log(node.type, iv.name);
                 for (const iv2 of node.inputs.slice()) {
                     if (
                         iv.name.split(" ")[0] === iv2.name.split(" ")[0] &&
                         iv !== iv2 &&
                         (customDefInputNames[node.type] || {})[iv2.name.split(" ")[0]] === iv2.name
                     ) {
-                        console.log("removing", node, iv);
-                        iv2.link = iv.link;
+                        if (iv.link !== null) {
+                            iv2.link = iv.link;
+                        }
                         node.inputs.splice(iv_idx, 1);
                     }
                 }
