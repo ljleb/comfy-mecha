@@ -480,27 +480,40 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
         "INPUT_TYPES": lambda: {
             "required": {
                 **{
-                    f"{name} ({'|'.join(sorted(merge_spaces.get_identifiers(merge_spaces_dict[index])))})": ("MECHA_RECIPE",)
+                    fix_param_name(name): ("MECHA_RECIPE", {
+                        "name": f"{fix_param_name(name)} ({'|'.join(sorted(merge_spaces.get_identifiers(merge_spaces_dict[index])))})",
+                    })
                     for index, name in enumerate(param_names.args[:len_mandatory_args])
                 },
                 **{
-                    f"{name} ({'|'.join(sorted(merge_spaces.get_identifiers(merge_spaces_dict[index])))})": ("MECHA_RECIPE",)
+                    name: ("MECHA_RECIPE", {
+                        "name": f"{name} ({'|'.join(sorted(merge_spaces.get_identifiers(merge_spaces_dict[index])))})",
+                    })
                     for index, name in sorted(param_names.kwargs.items(), key=lambda t: t[0])
                     if index not in default_args.kwargs
                 },
             },
             "optional": {
                 **{
-                    f"{name} ({default_args.args[default_index]})": ("MECHA_RECIPE", {"default": default_args.args[default_index]})
+                    name: ("MECHA_RECIPE", {
+                        "name": f"{name} ({default_args.args[default_index]})",
+                        "default": default_args.args[default_index],
+                    })
                     for default_index, name in enumerate(param_names.args[len_mandatory_args:])
                 },
                 **{
-                    f"{name} ({default_args.kwargs[index]})": ("MECHA_RECIPE", {"default": default_args.kwargs[index]})
+                    name: ("MECHA_RECIPE", {
+                        "name": f"{name} ({default_args.kwargs[index]})",
+                        "default": default_args.kwargs[index],
+                    })
                     for index, name in sorted(param_names.kwargs.items(), key=lambda t: t[0])
                     if index in default_args.kwargs
                 },
                 **({
-                    f"{param_names.vararg} ({'|'.join(sorted(merge_spaces.get_identifiers(input_merge_spaces.vararg)))})": ("MECHA_RECIPE_LIST", {"default": []}),
+                    param_names.vararg: ("MECHA_RECIPE_LIST", {
+                        "name": f"{param_names.vararg} ({'|'.join(sorted(merge_spaces.get_identifiers(input_merge_spaces.vararg)))})",
+                        "default": [],
+                    }),
                 } if param_names.has_varargs() else {}),
                 "_use_cache": ("BOOLEAN", {
                     "default": False,
@@ -514,6 +527,13 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
         "CATEGORY": "advanced/model_merging/mecha",
         "execute": get_method_node_execute(method),
     })
+
+
+def fix_param_name(name):
+    # for workflow backwards compatibility
+    if name.endswith("_dict"):
+        return name[:-len("_dict")]
+    return name
 
 
 MAX_VARARGS_MODELS = 64  # arbitrary limit to n-models methods (open an issue if this is a problem)
@@ -562,14 +582,6 @@ def get_method_node_execute(method: MergeMethod):
     num_mandatory_args = len(param_names.args) - len(param_defaults.args)
 
     def execute(*_args, **kwargs):
-        # remove default values / merge space from keys
-        # comfy nodes cannot distinguish display names from id names
-        # in consequence we have to unmangle things here
-        for k in list(kwargs):
-            if " (" in k and k.endswith(")"):
-                new_k = k.split(" ")[0]
-                kwargs[new_k] = kwargs.pop(k)
-
         # private key for caching
         use_cache = kwargs.pop("_use_cache")
 

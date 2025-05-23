@@ -1,6 +1,8 @@
 // original src: https://github.com/jags111/efficiency-nodes-comfyui
 import { app } from "../../scripts/app.js";
 
+let customDefInputNames = {};
+
 const MAX_VARARGS_MODELS = 64;  // arbitrary limit to n-models methods (open an issue if this is a problem)
 
 const findWidgetIndexByName = (widgets, name) => {
@@ -125,8 +127,43 @@ app.registerExtension({
             }
         }
     },
+    async beforeRegisterNodeDef(nodeType, nodeData, app) {
+        if (nodeData.output[0] === "MECHA_RECIPE" && nodeData.input) {
+            const inputs = Object.assign({}, nodeData.input.required || {}, nodeData.input.optional || {});
+            for (const input_name in inputs) {
+                if (inputs[input_name][0] === "MECHA_RECIPE" || inputs[input_name][0] === "MECHA_RECIPE_LIST") {
+                    if (!(nodeData.name in customDefInputNames)) {
+                        customDefInputNames[nodeData.name] = {};
+                    }
+                    customDefInputNames[nodeData.name][input_name] = (inputs[input_name][1] || {}).name || input_name;
+                }
+            }
+        }
+    },
     loadedGraphNode(node, app) {
-        for (const iv of node.inputs || []) {
+        for (const iv of (node.inputs || []).slice()) {
+            const iv_idx = node.inputs.indexOf(iv);
+            if (iv.type === "MECHA_RECIPE" || iv.type === "MECHA_RECIPE_LIST" || iv.type === "MECHA_HYPER") {
+                console.log(node.type, iv.name);
+                for (const iv2 of node.inputs.slice()) {
+                    if (
+                        iv.name.split(" ")[0] === iv2.name.split(" ")[0] &&
+                        iv !== iv2 &&
+                        (customDefInputNames[node.type] || {})[iv2.name.split(" ")[0]] === iv2.name
+                    ) {
+                        console.log("removing", node, iv);
+                        iv2.link = iv.link;
+                        node.inputs.splice(iv_idx, 1);
+                    }
+                }
+            }
+        }
+
+        for (const iv of (node.inputs || []).slice()) {
+            if (iv.type === "MECHA_RECIPE" || iv.type === "MECHA_RECIPE_LIST") {
+                iv.name = (customDefInputNames[node.type] || {})[iv.name.split(" ")[0]] || iv.name;
+            }
+
             let inputLink = iv.link;
             let originalDescriptor = Object.getOwnPropertyDescriptor(iv, 'link');
             inputLogic(node, iv);
