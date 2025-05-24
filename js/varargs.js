@@ -154,6 +154,8 @@ app.registerExtension({
                             iv2.link = iv.link;
                         }
                         node.inputs.splice(iv_idx, 1);
+                        const newHeight = node.computeSize()[1];
+                        node.setSize([node.size[0], newHeight]);
                     }
                 }
             }
