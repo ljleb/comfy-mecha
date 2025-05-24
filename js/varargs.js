@@ -148,7 +148,7 @@ app.registerExtension({
                     if (
                         iv.name.split(" ")[0] === iv2.name.split(" ")[0] &&
                         iv !== iv2 &&
-                        (customDefInputNames[node.type] || {})[iv2.name.split(" ")[0]] === iv2.name
+                        (customDefInputNames[node.type] || {})[iv2.name] === iv2.name
                     ) {
                         if (iv.link !== null) {
                             iv2.link = iv.link;
@@ -162,10 +162,6 @@ app.registerExtension({
         }
 
         for (const iv of (node.inputs || []).slice()) {
-            if (iv.type === "MECHA_RECIPE" || iv.type === "MECHA_RECIPE_LIST") {
-                iv.name = iv.name.split(" ")[0];
-            }
-
             let inputLink = iv.link;
             let originalDescriptor = Object.getOwnPropertyDescriptor(iv, 'link');
             inputLogic(node, iv);

@@ -214,6 +214,7 @@ class MechaMerger:
     ):
         global temporary_merged_recipes, prompt_executor
         total_buffer_size = memory_to_bytes(total_buffer_size)
+        recipe = sd_mecha.value_to_node(recipe)
 
         try:
             with open_input_dicts(
@@ -480,38 +481,31 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
         "INPUT_TYPES": lambda: {
             "required": {
                 **{
-                    fix_param_name(name): ("MECHA_RECIPE", {
-                        "name": f"{fix_param_name(name)} ({'|'.join(sorted(merge_spaces.get_identifiers(merge_spaces_dict[index])))})",
-                    })
+                    f"{fix_param_name(fix_param_name(name))} ({'|'.join(sorted(merge_spaces.get_identifiers(merge_spaces_dict[index])))})": ("MECHA_RECIPE",)
                     for index, name in enumerate(param_names.args[:len_mandatory_args])
                 },
                 **{
-                    name: ("MECHA_RECIPE", {
-                        "name": f"{name} ({'|'.join(sorted(merge_spaces.get_identifiers(merge_spaces_dict[index])))})",
-                    })
+                    f"{name} ({'|'.join(sorted(merge_spaces.get_identifiers(merge_spaces_dict[index])))})": ("MECHA_RECIPE",)
                     for index, name in sorted(param_names.kwargs.items(), key=lambda t: t[0])
                     if index not in default_args.kwargs
                 },
             },
             "optional": {
                 **{
-                    name: ("MECHA_RECIPE", {
-                        "name": f"{name} ({default_args.args[default_index]})",
+                    f"{name} ({default_args.args[default_index]})": ("MECHA_RECIPE", {
                         "default": default_args.args[default_index],
                     })
                     for default_index, name in enumerate(param_names.args[len_mandatory_args:])
                 },
                 **{
-                    name: ("MECHA_RECIPE", {
-                        "name": f"{name} ({default_args.kwargs[index]})",
+                    f"{name} ({default_args.kwargs[index]})": ("MECHA_RECIPE", {
                         "default": default_args.kwargs[index],
                     })
                     for index, name in sorted(param_names.kwargs.items(), key=lambda t: t[0])
                     if index in default_args.kwargs
                 },
                 **({
-                    param_names.vararg: ("MECHA_RECIPE_LIST", {
-                        "name": f"{param_names.vararg} ({'|'.join(sorted(merge_spaces.get_identifiers(input_merge_spaces.vararg)))})",
+                    f"{param_names.vararg} ({'|'.join(sorted(merge_spaces.get_identifiers(input_merge_spaces.vararg)))})": ("MECHA_RECIPE_LIST", {
                         "default": [],
                     }),
                 } if param_names.has_varargs() else {}),
@@ -584,6 +578,14 @@ def get_method_node_execute(method: MergeMethod):
     def execute(*_args, **kwargs):
         # private key for caching
         use_cache = kwargs.pop("_use_cache")
+
+        # remove default values / merge space from keys
+        # comfy nodes cannot distinguish display names from id names
+        # as a result we have to unmangle things here
+        for k in list(kwargs):
+            if " (" in k and k.endswith(")"):
+                new_k = k.split(" ")[0]
+                kwargs[new_k] = kwargs.pop(k)
 
         args = [
             kwargs.pop(k)
