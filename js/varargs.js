@@ -159,9 +159,6 @@ app.registerExtension({
             }
         }
 
-        const newHeight = node.computeSize()[1];
-        node.setSize([node.size[0], newHeight]);
-
         for (const iv of (node.inputs || []).slice()) {
             if (iv.type === "MECHA_RECIPE" || iv.type === "MECHA_RECIPE_LIST") {
                 iv.name = iv.name.split(" ")[0];
