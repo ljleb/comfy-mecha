@@ -481,7 +481,7 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
         "INPUT_TYPES": lambda: {
             "required": {
                 **{
-                    f"{fix_param_name(fix_param_name(name))} ({'|'.join(sorted(merge_spaces.get_identifiers(merge_spaces_dict[index])))})": ("MECHA_RECIPE",)
+                    f"{fix_param_name(name)} ({'|'.join(sorted(merge_spaces.get_identifiers(merge_spaces_dict[index])))})": ("MECHA_RECIPE",)
                     for index, name in enumerate(param_names.args[:len_mandatory_args])
                 },
                 **{
@@ -588,9 +588,9 @@ def get_method_node_execute(method: MergeMethod):
                 kwargs[new_k] = kwargs.pop(k)
 
         args = [
-            kwargs.pop(k)
+            kwargs.pop(fix_param_name(k))
             if i < num_mandatory_args else
-            kwargs.pop(k, param_defaults.args[i - num_mandatory_args])
+            kwargs.pop(fix_param_name(k), param_defaults.args[i - num_mandatory_args])
             for i, k in enumerate(param_names.args)
         ]
         if param_names.has_varargs():
