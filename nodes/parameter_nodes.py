@@ -59,6 +59,109 @@ class BlocksMechaHyper:
         ) | default,
 
 
+class SdxlBlocksMechaHyper:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "BASE": ("FLOAT", {
+                    "default": 0.0,
+                    "min": -2**64,
+                    "max": 2**64,
+                }),
+                **{
+                    f"IN{i:02}": ("FLOAT", {
+                        "default": 0.0,
+                        "min": -2**64,
+                        "max": 2**64,
+                    })
+                    for i in range(9)
+                },
+                "M00": ("FLOAT", {
+                    "default": 0.0,
+                    "min": -2**64,
+                    "max": 2**64,
+                }),
+                **{
+                    f"OUT{i:02}": ("FLOAT", {
+                        "default": 0.0,
+                        "min": -2**64,
+                        "max": 2**64,
+                    })
+                    for i in range(9)
+                },
+                "VAE": ("FLOAT", {
+                    "default": 0.0,
+                    "min": -2**64,
+                    "max": 2**64,
+                }),
+            },
+        }
+
+    RETURN_TYPES = ("MECHA_RECIPE",)
+    RETURN_NAMES = ("recipe",)
+    FUNCTION = "execute"
+    OUTPUT_NODE = False
+    CATEGORY = "advanced/model_merging/mecha"
+
+    def execute(
+        self,
+        **kwargs,
+    ):
+        blocks = sd_mecha.literal(kwargs, "sdxl-supermerger_blocks")
+        blocks = sd_mecha.convert(blocks, "sdxl-sgm")
+        return blocks,
+
+
+class Sd1BlocksMechaHyper:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "BASE": ("FLOAT", {
+                    "default": 0.0,
+                    "min": -2**64,
+                    "max": 2**64,
+                }),
+                **{
+                    f"IN{i:02}": ("FLOAT", {
+                        "default": 0.0,
+                        "min": -2**64,
+                        "max": 2**64,
+                    })
+                    for i in range(12)
+                },
+                "M00": ("FLOAT", {
+                    "default": 0.0,
+                    "min": -2**64,
+                    "max": 2**64,
+                }),
+                **{
+                    f"OUT{i:02}": ("FLOAT", {
+                        "default": 0.0,
+                        "min": -2**64,
+                        "max": 2**64,
+                    })
+                    for i in range(12)
+                },
+            },
+        }
+
+    RETURN_TYPES = ("MECHA_RECIPE",)
+    RETURN_NAMES = ("recipe",)
+    FUNCTION = "execute"
+    OUTPUT_NODE = False
+    CATEGORY = "advanced/model_merging/mecha"
+
+    def execute(
+        self,
+        **kwargs,
+    ):
+        blocks = sd_mecha.literal(kwargs, "sd1-supermerger_blocks")
+        blocks = sd_mecha.convert(blocks, "sd1-ldm")
+        return blocks,
+
+
 class FloatMechaHyper:
     @classmethod
     def INPUT_TYPES(cls):
@@ -82,6 +185,33 @@ class FloatMechaHyper:
     def execute(
         self,
         value: float,
+    ):
+        return value,
+
+
+class IntMechaHyper:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "value": ("INT", {
+                    "default": 0,
+                    "min": -2**64,
+                    "max": 2**64,
+                    "step": 1,
+                }),
+            },
+        }
+
+    RETURN_TYPES = ("MECHA_RECIPE",)
+    RETURN_NAMES = ("recipe",)
+    FUNCTION = "execute"
+    OUTPUT_NODE = False
+    CATEGORY = "advanced/model_merging/mecha"
+
+    def execute(
+        self,
+        value: int,
     ):
         return value,
 
@@ -179,6 +309,9 @@ def get_components_params_node_execute(config: model_configs.ModelConfig):
 
 NODE_CLASS_MAPPINGS = {
     "Blocks Mecha Hyper": BlocksMechaHyper,
+    "SDXL-SGM Mecha Blocks Parameters": SdxlBlocksMechaHyper,
+    "SD1-LDM Mecha Blocks Parameters": Sd1BlocksMechaHyper,
+    "Int Mecha Hyper": IntMechaHyper,
     "Float Mecha Hyper": FloatMechaHyper,
     "String Mecha Hyper": StringMechaHyper,
     "Bool Mecha Hyper": BoolMechaHyper,
@@ -186,7 +319,10 @@ NODE_CLASS_MAPPINGS = {
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Blocks Mecha Hyper": "Blocks",
+    "SDXL-SGM Mecha Blocks Parameters": "SDXL-SGM Blocks",
+    "SD1-LDM Mecha Blocks Parameters": "SD1-LDM Blocks",
     "Float Mecha Hyper": "Float",
+    "Int Mecha Hyper": "Int",
     "String Mecha Hyper": "String",
     "Bool Mecha Hyper": "Bool",
 }
