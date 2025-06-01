@@ -92,8 +92,8 @@ class RegexWeightsMechaHyper:
             },
         }
 
-    RETURN_TYPES = ("MECHA_RECIPE",)
-    RETURN_NAMES = ("recipe",)
+    RETURN_TYPES = ("MECHA_RECIPE", "STRING")
+    RETURN_NAMES = ("recipe", "recipe_txt")
     FUNCTION = "execute"
     OUTPUT_NODE = False
     CATEGORY = "advanced/model_merging/mecha"
@@ -116,9 +116,11 @@ class RegexWeightsMechaHyper:
             weights[key] = weight
 
         if weights:
-            return sd_mecha.literal(weights, model_config) | default,
+            recipe = sd_mecha.literal(weights, model_config) | default
         else:
-            return default
+            recipe = sd_mecha.literal(default, model_config)
+
+        return recipe, sd_mecha.serialize(recipe)
 
 
 class KeyMatcher:
