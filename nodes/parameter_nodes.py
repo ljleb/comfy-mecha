@@ -1,5 +1,8 @@
 import functools
 import operator
+import re
+import typing
+from typing import List, Literal
 
 import sd_mecha
 from sd_mecha.extensions import model_configs
@@ -57,6 +60,103 @@ class BlocksMechaHyper:
             } if blocks.strip() else {},
             model_config,
         ) | default,
+
+
+RegexMode = Literal["simple", "regex"]
+REGEX_MODES = typing.get_args(RegexMode)
+
+
+class RegexWeightsMechaHyper:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "regex_weights": ("STRING", {
+                    "default": "",
+                    "tooltip": 'one regex per line:\n\n<pattern>: <weight>\n<pattern>: <weight>',
+                    "multiline": True,
+                }),
+                "default": ("FLOAT", {
+                    "default": 0.0,
+                    "min": -2**64,
+                    "max": 2**64,
+                }),
+                "model_config": (list(config.identifier for config in sd_mecha.extensions.model_configs.get_all()), {
+                    "default": "sdxl-sgm"
+                }),
+                "regex_mode": (REGEX_MODES, {
+                    "default": REGEX_MODES[0],
+                    "tooltip": 'simple: the only special character is *, which means to match any number of characters. \\* matches "*" literally\n'
+                               'regex: full python regex mode. for example, ".*" matches any number of characters'
+                })
+            },
+        }
+
+    RETURN_TYPES = ("MECHA_RECIPE",)
+    RETURN_NAMES = ("recipe",)
+    FUNCTION = "execute"
+    OUTPUT_NODE = False
+    CATEGORY = "advanced/model_merging/mecha"
+
+    def execute(
+        self,
+        regex_weights: str,
+        default: float,
+        model_config: str,
+        regex_mode: RegexMode,
+    ):
+        model_config = sd_mecha.extensions.model_configs.resolve(model_config)
+        weights_str = [weight_regex for weight_regex in regex_weights.split("\n") if weight_regex.strip()]
+        key_matcher = KeyMatcher(weights_str, mode=regex_mode)
+        weights = {}
+        for key in model_config.keys():
+            weight = key_matcher.get_weight_for(key)
+            if weight is None:
+                continue
+            weights[key] = weight
+
+        if weights:
+            return sd_mecha.literal(weights, model_config) | default,
+        else:
+            return default
+
+
+class KeyMatcher:
+    def __init__(self, matchers: List[str], mode: RegexMode):
+        self.matchers = []
+        for matcher in matchers:
+            parts = matcher.rsplit(":", maxsplit=1)
+            if len(parts) != 2:
+                continue
+            pattern, weight = parts
+            try:
+                weight = float(weight.strip())
+                pattern = self._compile(pattern.strip(), mode)
+                self.matchers.append((pattern, weight))
+            except ValueError:
+                continue
+
+    @staticmethod
+    def _compile(pattern: str, mode: str):
+        if mode == "simple":
+            pattern = re.escape("*").join(
+                ".*".join(
+                    re.escape(part)
+                    for part in split_part.split("*")
+                )
+                for split_part in pattern.split("\\*")
+            )
+        elif mode != "regex":
+            raise ValueError(f"unrecognized mode '{mode}'")
+
+        return re.compile(pattern)
+
+    def get_weight_for(self, key):
+        for matcher, weight in self.matchers:
+            if matcher.search(key):
+                return weight
+
+        return None
 
 
 class SdxlBlocksMechaHyper:
@@ -311,6 +411,7 @@ NODE_CLASS_MAPPINGS = {
     "Blocks Mecha Hyper": BlocksMechaHyper,
     "SDXL-SGM Mecha Blocks Parameters": SdxlBlocksMechaHyper,
     "SD1-LDM Mecha Blocks Parameters": Sd1BlocksMechaHyper,
+    "Mecha Regex Weights": RegexWeightsMechaHyper,
     "Int Mecha Hyper": IntMechaHyper,
     "Float Mecha Hyper": FloatMechaHyper,
     "String Mecha Hyper": StringMechaHyper,
@@ -321,6 +422,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Blocks Mecha Hyper": "Blocks",
     "SDXL-SGM Mecha Blocks Parameters": "SDXL-SGM Blocks",
     "SD1-LDM Mecha Blocks Parameters": "SD1-LDM Blocks",
+    "Mecha Regex Weights": "Regex Weights",
     "Float Mecha Hyper": "Float",
     "Int Mecha Hyper": "Int",
     "String Mecha Hyper": "String",
