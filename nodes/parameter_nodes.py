@@ -30,6 +30,7 @@ class BlocksMechaHyper:
                     "default": 0.0,
                     "min": -2**64,
                     "max": 2**64,
+                    "step": 0.01,
                 }),
                 "model_config": (list(BLOCK_CONFIGS),),
             },
@@ -80,6 +81,7 @@ class RegexWeightsMechaHyper:
                     "default": 0.0,
                     "min": -2**64,
                     "max": 2**64,
+                    "step": 0.01,
                 }),
                 "model_config": (list(config.identifier for config in sd_mecha.extensions.model_configs.get_all()), {
                     "default": "sdxl-sgm"
@@ -170,12 +172,14 @@ class SdxlBlocksMechaHyper:
                     "default": 0.0,
                     "min": -2**64,
                     "max": 2**64,
+                    "step": 0.01,
                 }),
                 **{
                     f"IN{i:02}": ("FLOAT", {
                         "default": 0.0,
                         "min": -2**64,
                         "max": 2**64,
+                        "step": 0.01,
                     })
                     for i in range(9)
                 },
@@ -183,12 +187,14 @@ class SdxlBlocksMechaHyper:
                     "default": 0.0,
                     "min": -2**64,
                     "max": 2**64,
+                    "step": 0.01,
                 }),
                 **{
                     f"OUT{i:02}": ("FLOAT", {
                         "default": 0.0,
                         "min": -2**64,
                         "max": 2**64,
+                        "step": 0.01,
                     })
                     for i in range(9)
                 },
@@ -196,6 +202,7 @@ class SdxlBlocksMechaHyper:
                     "default": 0.0,
                     "min": -2**64,
                     "max": 2**64,
+                    "step": 0.01,
                 }),
             },
         }
@@ -224,12 +231,14 @@ class Sd1BlocksMechaHyper:
                     "default": 0.0,
                     "min": -2**64,
                     "max": 2**64,
+                    "step": 0.01,
                 }),
                 **{
                     f"IN{i:02}": ("FLOAT", {
                         "default": 0.0,
                         "min": -2**64,
                         "max": 2**64,
+                        "step": 0.01,
                     })
                     for i in range(12)
                 },
@@ -237,12 +246,14 @@ class Sd1BlocksMechaHyper:
                     "default": 0.0,
                     "min": -2**64,
                     "max": 2**64,
+                    "step": 0.01,
                 }),
                 **{
                     f"OUT{i:02}": ("FLOAT", {
                         "default": 0.0,
                         "min": -2**64,
                         "max": 2**64,
+                        "step": 0.01,
                     })
                     for i in range(12)
                 },
