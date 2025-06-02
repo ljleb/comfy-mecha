@@ -88,8 +88,13 @@ class RegexWeightsMechaHyper:
                 }),
                 "regex_mode": (REGEX_MODES, {
                     "default": REGEX_MODES[0],
-                    "tooltip": 'simple: the only special character is *, which means to match any number of characters. \\* matches "*" literally\n'
-                               'regex: full python regex mode. for example, ".*" matches any number of characters'
+                    "tooltip": '- simple: the only special character is *, which means to match any number of characters. For example, "a*f" will match "abcdef". \\* matches * literally and \\\\ matches \\ literally\n'
+                               '- regex: full python regex mode. for example, ".*" matches any number of characters'
+                }),
+                "match_full_keys": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "- True: a pattern needs to cover a key from start to end to match it\n"
+                               "- False: a pattern only needs cover a part of a key to match it"
                 })
             },
         }
@@ -106,10 +111,11 @@ class RegexWeightsMechaHyper:
         default: float,
         model_config: str,
         regex_mode: RegexMode,
+        match_full_keys: bool,
     ):
         model_config = sd_mecha.extensions.model_configs.resolve(model_config)
         weights_str = [weight_regex for weight_regex in regex_weights.split("\n") if weight_regex.strip()]
-        key_matcher = KeyMatcher(weights_str, mode=regex_mode)
+        key_matcher = KeyMatcher(weights_str, mode=regex_mode, full_match=match_full_keys)
         weights = {}
         for key in model_config.keys():
             weight = key_matcher.get_weight_for(key)
@@ -126,8 +132,9 @@ class RegexWeightsMechaHyper:
 
 
 class KeyMatcher:
-    def __init__(self, matchers: List[str], mode: RegexMode):
+    def __init__(self, matchers: List[str], mode: RegexMode, full_match: bool):
         self.matchers = []
+        self.full_match = full_match
         for matcher in matchers:
             parts = matcher.rsplit(":", maxsplit=1)
             if len(parts) != 2:
@@ -143,21 +150,42 @@ class KeyMatcher:
     @staticmethod
     def _compile(pattern: str, mode: str):
         if mode == "simple":
-            pattern = re.escape("*").join(
-                ".*".join(
-                    re.escape(part)
-                    for part in split_part.split("*")
-                )
-                for split_part in pattern.split("\\*")
-            )
-        elif mode != "regex":
+            processed_pattern = ""
+            current_part = []
+            is_escape = False
+
+            def flush_current_part():
+                nonlocal current_part
+                part = re.escape("".join(current_part))
+                current_part.clear()
+                return part
+
+            for char in pattern:
+                if is_escape:
+                    current_part.append(char)
+                    is_escape = False
+                elif char == "\\":
+                    is_escape = True
+                elif char == "*":
+                    processed_pattern += flush_current_part() + ".*"
+                    current_part.clear()
+                else:
+                    current_part.append(char)
+            processed_pattern += flush_current_part()
+            return re.compile(processed_pattern)
+        elif mode == "regex":
+            return re.compile(pattern)
+        else:
             raise ValueError(f"unrecognized mode '{mode}'")
 
-        return re.compile(pattern)
-
     def get_weight_for(self, key):
+        if self.full_match:
+            match_fn = re.fullmatch
+        else:
+            match_fn = re.search
+
         for matcher, weight in self.matchers:
-            if matcher.search(key):
+            if match_fn(matcher, key):
                 return weight
 
         return None
