@@ -39,7 +39,7 @@ class BlocksMechaHyper:
     RETURN_NAMES = ("recipe",)
     FUNCTION = "execute"
     OUTPUT_NODE = False
-    CATEGORY = "advanced/model_merging/mecha"
+    CATEGORY = "mecha"
 
     def execute(
         self,
@@ -102,7 +102,7 @@ class RegexWeightsMechaHyper:
     RETURN_NAMES = ("recipe", "recipe_txt")
     FUNCTION = "execute"
     OUTPUT_NODE = False
-    CATEGORY = "advanced/model_merging/mecha"
+    CATEGORY = "mecha"
 
     def execute(
         self,
@@ -238,7 +238,7 @@ class SdxlBlocksMechaHyper:
     RETURN_NAMES = ("recipe",)
     FUNCTION = "execute"
     OUTPUT_NODE = False
-    CATEGORY = "advanced/model_merging/mecha"
+    CATEGORY = "mecha"
 
     def execute(
         self,
@@ -291,7 +291,7 @@ class Sd1BlocksMechaHyper:
     RETURN_NAMES = ("recipe",)
     FUNCTION = "execute"
     OUTPUT_NODE = False
-    CATEGORY = "advanced/model_merging/mecha"
+    CATEGORY = "mecha"
 
     def execute(
         self,
@@ -320,7 +320,7 @@ class FloatMechaHyper:
     RETURN_NAMES = ("recipe",)
     FUNCTION = "execute"
     OUTPUT_NODE = False
-    CATEGORY = "advanced/model_merging/mecha"
+    CATEGORY = "mecha"
 
     def execute(
         self,
@@ -347,7 +347,7 @@ class IntMechaHyper:
     RETURN_NAMES = ("recipe",)
     FUNCTION = "execute"
     OUTPUT_NODE = False
-    CATEGORY = "advanced/model_merging/mecha"
+    CATEGORY = "mecha"
 
     def execute(
         self,
@@ -369,7 +369,7 @@ class StringMechaHyper:
     RETURN_NAMES = ("recipe",)
     FUNCTION = "execute"
     OUTPUT_NODE = False
-    CATEGORY = "advanced/model_merging/mecha"
+    CATEGORY = "mecha"
 
     def execute(
         self,
@@ -391,7 +391,7 @@ class BoolMechaHyper:
     RETURN_NAMES = ("recipe",)
     FUNCTION = "execute"
     OUTPUT_NODE = False
-    CATEGORY = "advanced/model_merging/mecha"
+    CATEGORY = "mecha"
 
     def execute(
         self,
@@ -432,7 +432,7 @@ def make_components_params_node_class(class_name: str, config: model_configs.Mod
         "RETURN_NAMES": ("recipe",),
         "FUNCTION": "execute",
         "OUTPUT_NODE": False,
-        "CATEGORY": "advanced/model_merging/mecha",
+        "CATEGORY": "mecha",
         "execute": get_components_params_node_execute(config),
     })
 

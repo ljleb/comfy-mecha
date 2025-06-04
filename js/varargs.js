@@ -9,7 +9,7 @@ const findWidgetIndexByName = (widgets, name) => {
     return widgets ? widgets.findIndex((w) => w.name === name) : null;
 };
 
-function handleMechaModelListVisibility(node, visibleCount) {
+function handleMechaModelListVisibilityByCount(node, visibleCount) {
     if (node.origInputs === undefined) {
         node.origInputs = node.inputs;
     }
@@ -29,7 +29,7 @@ function handleMechaModelListVisibility(node, visibleCount) {
     node.setSize([node.size[0], newHeight]);
 }
 
-function handleMechaHyperBlocksListVisibility(node, preset) {
+function handleMechaHyperBlocksVisibilityByPreset(node, preset) {
     if (node.origWidgets === undefined) {
         node.origWidgets = node.widgets;
     }
@@ -73,12 +73,10 @@ function handleMechaConverterVisibility(node, input_link) {
     node.setSize([node.size[0], newHeight]);
 }
 
-function handleMechaModelListVisibilityByCount(node, value) {
-    handleMechaModelListVisibility(node, value);
-}
-
-function handleMechaHyperBlocksVisibilityByPreset(node, value) {
-    handleMechaHyperBlocksListVisibility(node, value);
+function handleMechaMergeMethodCacheInitByIdentifier(node, identifier, widget) {
+    if (identifier === "") {
+        widget.value = randomCacheId();
+    }
 }
 
 function handleMechaConverterVisibilityByConnection(node, input) {
@@ -88,7 +86,7 @@ function handleMechaConverterVisibilityByConnection(node, input) {
 function widgetLogic(node, widget, value) {
     const handler = nodeWidgetHandlers[node.comfyClass]?.[widget.name];
     if (handler) {
-        handler(node, value);
+        handler(node, value, widget);
     }
 }
 
@@ -106,6 +104,9 @@ const nodeWidgetHandlers = {
     "Blocks Mecha Hyper": {
         "preset": handleMechaHyperBlocksVisibilityByPreset
     },
+    "Mecha Merge Method Cache": {
+        "identifier": handleMechaMergeMethodCacheInitByIdentifier
+    },
 };
 
 const nodeInputHandlers = {
@@ -113,6 +114,16 @@ const nodeInputHandlers = {
         "target_config_from_recipe_override": handleMechaConverterVisibilityByConnection
     },
 };
+
+function randomCacheId() {
+  const letters = "abcdefghijklmnopqrstuvwxyz";
+  let str = "";
+  for (let i = 0; i < 6; i++) {
+    const idx = Math.floor(Math.random() * letters.length);
+    str += letters[idx];
+  }
+  return str;
+}
 
 app.registerExtension({
     name: "mecha.widgethider",
@@ -131,7 +142,7 @@ app.registerExtension({
         if (nodeData.output[0] === "MECHA_RECIPE" && nodeData.input) {
             const inputs = Object.assign({}, nodeData.input.required || {}, nodeData.input.optional || {});
             for (const input_name in inputs) {
-                if (inputs[input_name][0] === "MECHA_RECIPE" || inputs[input_name][0] === "MECHA_RECIPE_LIST") {
+                if (["MECHA_RECIPE", "MECHA_RECIPE_LIST", "MECHA_MERGE_METHOD_CACHE"].includes(inputs[input_name][0])) {
                     if (!(nodeData.name in customDefInputNames)) {
                         customDefInputNames[nodeData.name] = {};
                     }
