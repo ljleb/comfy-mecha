@@ -56,7 +56,7 @@ class MechaMergeMethodCacheUnit:
     DESCRIPTION = ("Holds a persistent merge method cache. This node outputs a cache dict via its cache port; "
                    "merge methods can store or retrieve intermediate results (tensors, SVDs, etc.) in that dict."
                    "\n\n"
-                   "To enable caching, connect this node's cache output to a merge node's cache input. "
+                   "To enable caching, connect this node's cache output to a recipe node's cache input. "
                    "Once a cache unit has been used by a given merge method type, it becomes tied to "
                    "that type of merge method "
                    "(e.g., you cannot share the same cache between Truncate Rank and Rotate). "

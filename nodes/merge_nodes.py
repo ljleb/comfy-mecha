@@ -350,6 +350,10 @@ class MechaModelRecipe:
                         if f.endswith(".safetensors")
                     ],
                 ),
+                "model_config": (["auto"] + [
+                    config.identifier for config in sd_mecha.extensions.model_configs.get_all_base()
+                    if "blocks" not in config.identifier
+                ],),
             },
         }
 
@@ -362,8 +366,11 @@ class MechaModelRecipe:
     def execute(
         self,
         model_path: str,
+        model_config: str,
     ):
-        return sd_mecha.model(model_path),
+        if model_config == "auto":
+            model_config = None
+        return sd_mecha.model(model_path, config=model_config),
 
 
 class MechaAnyModelRecipe:
@@ -378,6 +385,7 @@ class MechaAnyModelRecipe:
                         if f.endswith(".safetensors")
                     ],
                 ),
+                "model_config": (["auto"] + [config.identifier for config in sd_mecha.extensions.model_configs.get_all()],),
             },
             "optional": {
                 "merge_space": (MERGE_SPACES_OPTIONAL_INPUT_TYPE, {
@@ -395,11 +403,14 @@ class MechaAnyModelRecipe:
     def execute(
         self,
         model_path: str,
+        model_config: str,
         merge_space: str,
     ):
         if merge_space == "default":
             merge_space = "weight"
-        return sd_mecha.model(model_path, merge_space=merge_space),
+        if model_config == "auto":
+            model_config = None
+        return sd_mecha.model(model_path, config=model_config, merge_space=merge_space),
 
 
 class MechaAlreadyLoadedModelRecipe:
@@ -447,6 +458,9 @@ class MechaLoraRecipe:
         return {
             "required": {
                 "model_path": ([f for f in folder_paths.get_filename_list("loras") if f.endswith(".safetensors")],),
+                "model_config": (["auto"] + [
+                    config.identifier for config in sd_mecha.extensions.model_configs.get_all_aux()
+                ],),
             },
         }
 
