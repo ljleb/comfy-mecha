@@ -473,8 +473,12 @@ class MechaLoraRecipe:
     def execute(
         self,
         model_path: str,
+        model_config: str,
     ):
-        recipe = sd_mecha.model(model_path)
+        if model_config == "auto":
+            model_config = None
+
+        recipe = sd_mecha.model(model_path, config=model_config)
         lora_dirs = [pathlib.Path(p) for p in folder_paths.get_folder_paths("loras")]
         with open_input_dicts(recipe, lora_dirs):
             if recipe.model_config.identifier == "sdxl-kohya_kohya_lora":
