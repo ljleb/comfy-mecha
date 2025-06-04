@@ -74,6 +74,7 @@ function handleMechaConverterVisibility(node, input_link) {
 }
 
 function handleMechaMergeMethodCacheInitByIdentifier(node, identifier, widget) {
+    widget.type = "hidden";
     if (identifier === "") {
         widget.value = randomCacheId();
     }
@@ -104,7 +105,7 @@ const nodeWidgetHandlers = {
     "Blocks Mecha Hyper": {
         "preset": handleMechaHyperBlocksVisibilityByPreset
     },
-    "Mecha Merge Method Cache": {
+    "Mecha Merge Method Cache Unit": {
         "identifier": handleMechaMergeMethodCacheInitByIdentifier
     },
 };
@@ -116,13 +117,13 @@ const nodeInputHandlers = {
 };
 
 function randomCacheId() {
-  const letters = "abcdefghijklmnopqrstuvwxyz";
-  let str = "";
-  for (let i = 0; i < 6; i++) {
-    const idx = Math.floor(Math.random() * letters.length);
-    str += letters[idx];
-  }
-  return str;
+    const letters = "abcdefghijklmnopqrstuvwxyz";
+    let str = "";
+    for (let i = 0; i < 64; i++) {
+        const idx = Math.floor(Math.random() * letters.length);
+        str += letters[idx];
+    }
+    return str;
 }
 
 app.registerExtension({

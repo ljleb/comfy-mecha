@@ -43,6 +43,7 @@ class MechaMergeMethodCacheUnit:
             "required": {
                 "identifier": ("STRING", {
                     "default": "",
+                    "visible": False,
                 }),
             },
         }
