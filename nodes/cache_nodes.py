@@ -54,13 +54,16 @@ class MechaMergeMethodCacheUnit:
     OUTPUT_NODE = False
     CATEGORY = "mecha"
     DESCRIPTION = ("Holds a persistent merge method cache. This node outputs a cache dict via its cache port; "
-                   "merge methods can store or retrieve intermediate results (tensors, SVDs, etc.) in that dict. "
+                   "merge methods can store or retrieve intermediate results (tensors, SVDs, etc.) in that dict."
+                   "\n\n"
                    "To enable caching, connect this node's cache output to a merge node's cache input. "
                    "Once a cache unit has been used by a given merge method type, it becomes tied to "
-                   "that method (e.g., you cannot share the same cache between Truncate Rank and Rotate)."
-                   "On subsequent runs, merge methods will reuse cached artifacts -- "
-                   "each merge method is responsible for deciding when some cache results need to be recomputed. "
-                   "The cache persists as long as this node remains in the workflow; "
+                   "that type of merge method "
+                   "(e.g., you cannot share the same cache between Truncate Rank and Rotate). "
+                   "On subsequent runs, merge methods will reuse cached artifacts. "
+                   "Each merge method is responsible for deciding when some cache results need to be recomputed."
+                   "\n\n"
+                   "The cache persists as long as this node remains in the workflow, even if it is disconnected; "
                    "if you run a workflow that doesn't include this node, its cache is cleared after execution.")
 
     @classmethod
