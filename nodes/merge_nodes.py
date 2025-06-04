@@ -13,7 +13,7 @@ from sd_mecha.extensions import merge_methods, merge_spaces
 from sd_mecha.extensions.merge_methods import MergeMethod
 from comfy import model_management
 from comfy.sd import load_state_dict_guess_config
-from typing import List, Tuple, Iterable, Any, Optional
+from typing import List, Tuple, Iterable, Any, Optional, Dict
 
 
 temporary_merged_recipes: List[Tuple[str, Iterable[Any]]] = []
@@ -22,11 +22,38 @@ temporary_mergers_count: int = 0
 prompt_executor: Optional[execution.PromptExecutor] = None
 
 
+class MergeMethodCache:
+    def __init__(self, cache=None):
+        if cache is None:
+            cache = {}
+        self.cache = cache
+        self.marked = False
+
+    def mark(self):
+        self.marked = True
+
+    def unmark(self):
+        self.marked = False
+
+
+class HashableDict(dict):
+    def __hash__(self):
+        return hash(tuple(sorted(self.items())))
+
+
+merge_method_caches: Dict[str, Dict[HashableDict[int | str, str], MergeMethodCache]] = {}
+
+
 def patch_prompt_executor():
     patch_key = "__mecha_execute_original"
     if not hasattr(execution.PromptExecutor, patch_key):
         setattr(execution.PromptExecutor, patch_key, execution.PromptExecutor.execute)
         execution.PromptExecutor.execute = functools.partialmethod(prompt_executor_execute, __original_function=execution.PromptExecutor.execute)
+
+    patch_key = "__mecha_reset_original"
+    if not hasattr(execution.PromptExecutor, patch_key):
+        setattr(execution.PromptExecutor, patch_key, execution.PromptExecutor.reset)
+        execution.PromptExecutor.reset = functools.partialmethod(prompt_executor_reset, __original_function=execution.PromptExecutor.reset)
 
 
 def prompt_executor_execute(self, *args, __original_function, **kwargs):
@@ -35,7 +62,16 @@ def prompt_executor_execute(self, *args, __original_function, **kwargs):
     cached_mergers_count = 0
     temporary_mergers_count = 0
     try:
-        return __original_function(self, *args, **kwargs)
+        res = __original_function(self, *args, **kwargs)
+
+        for mm_id, mm_data in merge_method_caches.items():
+            for mm_inputs, mm_cache in mm_data.copy().items():
+                if not mm_cache.marked:
+                    del mm_data[mm_inputs]
+                else:
+                    mm_cache.unmark()
+
+        return res
     finally:
         if cached_mergers_count > 0 and temporary_mergers_count > 0:
             free_temporary_merges(self)
@@ -58,6 +94,13 @@ def free_temporary_merges(prompt_executor: execution.PromptExecutor):
     model_management.cleanup_models()
     gc.collect()
     model_management.soft_empty_cache()
+
+
+def prompt_executor_reset(self, *args, __original_function, **kwargs):
+    global temporary_merged_recipes, merge_method_caches
+    temporary_merged_recipes.clear()
+    merge_method_caches.clear()
+    return __original_function(self, *args, **kwargs)
 
 
 patch_prompt_executor()
@@ -520,6 +563,7 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
         "OUTPUT_NODE": False,
         "CATEGORY": "advanced/model_merging/mecha",
         "execute": get_method_node_execute(method),
+        "IS_CHANGED": get_method_node_is_changed(),
     })
 
 
@@ -572,12 +616,13 @@ def get_all_torch_devices() -> List[str]:
 def get_method_node_execute(method: MergeMethod):
     param_names = method.get_param_names()
     param_defaults = method.get_default_args()
+    param_merge_spaces = method.get_input_merge_spaces().as_dict()
 
     num_mandatory_args = len(param_names.args) - len(param_defaults.args)
 
     def execute(*_args, **kwargs):
         # private key for caching
-        use_cache = kwargs.pop("_use_cache")
+        use_cache = kwargs.pop("_cache")
 
         # remove default values / merge space from keys
         # comfy nodes cannot distinguish display names from id names
@@ -601,10 +646,41 @@ def get_method_node_execute(method: MergeMethod):
             recipe = recipe | kwargs["a"]
 
         if use_cache:
-            recipe.set_cache()
+            inputs_that_can_f_cache = HashableDict()
+            for param_id, param_name in param_names.as_dict().items():
+                param_merge_space = param_merge_spaces.get(param_id)
+                if isinstance(param_merge_space, merge_spaces.MergeSpaceSymbol):
+                    param_merge_space = param_merge_space.merge_spaces
+                if all(merge_spaces.resolve(ms) not in param_merge_space for ms in ("weight", "delta")):
+                    continue
+
+                arg_recipe = args[param_id] if isinstance(param_id, int) else kwargs[param_id]
+                with open_input_dicts(
+                    arg_recipe,
+                    get_all_folder_paths(),
+                ):
+                    inputs_that_can_f_cache[param_id] = sd_mecha.serialize(arg_recipe)
+
+            caches_by_inputs = merge_method_caches.setdefault(method.identifier, {})
+            method_cache = caches_by_inputs.setdefault(inputs_that_can_f_cache, MergeMethodCache())
+            method_cache.mark()
+            recipe.set_cache(method_cache.cache)
+
         return recipe,
 
     return execute
+
+
+def get_method_node_is_changed():
+    changing_value = False
+
+    def IS_CHANGED(**kwargs):
+        nonlocal changing_value
+        if kwargs["_use_cache"]:
+            changing_value = not changing_value
+        return changing_value
+
+    return IS_CHANGED
 
 
 def snake_case_to_upper(name: str):

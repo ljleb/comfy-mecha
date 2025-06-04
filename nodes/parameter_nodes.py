@@ -2,9 +2,8 @@ import functools
 import operator
 import re
 import typing
-from typing import List, Literal
-
 import sd_mecha
+from typing import List, Literal
 from sd_mecha.extensions import model_configs
 
 
@@ -95,7 +94,7 @@ class RegexWeightsMechaHyper:
                     "default": False,
                     "tooltip": "- True: a pattern needs to cover a key from start to end to match it\n"
                                "- False: a pattern only needs cover a part of a key to match it"
-                })
+                }),
             },
         }
 
