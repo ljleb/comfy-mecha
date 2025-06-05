@@ -582,7 +582,7 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
                                "you probably want to either use this *or* a cache unit, but not both at the same time "
                                "because the memory adds up.\n\n"
                                "The difference between merge checkpointing and cache is that merge checkpointing "
-                               "completely re-merges from scratch if any input changes."
+                               "completely re-merges from scratch if any input changes. "
                                "Merge checkpointing is also generally much faster than cache in the fast path.",
                 }),
             },
