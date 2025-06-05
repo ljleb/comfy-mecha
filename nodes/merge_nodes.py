@@ -198,12 +198,15 @@ class MechaMerger:
                     "max": 16,
                     "step": 1,
                 }),
+                "omit_vae": ("BOOLEAN", {
+                    "default": True,
+                }),
                 "temporary_merge": ("BOOLEAN", {
                     "default": True,
                 }),
                 "strict_weight_space": ("BOOLEAN", {
                     "default": True,
-                })
+                }),
             },
         }
 
@@ -230,6 +233,7 @@ class MechaMerger:
         default_merge_dtype: str,
         total_buffer_size: str,
         threads: int,
+        omit_vae: bool,
         temporary_merge: bool,
         strict_weight_space: bool,
     ):
@@ -237,14 +241,15 @@ class MechaMerger:
         total_buffer_size = memory_to_bytes(total_buffer_size)
         recipe = sd_mecha.value_to_node(recipe)
 
-        try:
-            with open_input_dicts(
-                recipe,
-                get_all_folder_paths(),
-            ):
+        with open_input_dicts(
+            recipe,
+            get_all_folder_paths(),
+        ):
+            recipe_config = recipe.model_config
+            try:
                 recipe_txt = sd_mecha.serialize(recipe)
-        except TypeError:
-            recipe_txt = str(id(recipe))
+            except TypeError:
+                recipe_txt = str(id(recipe))
 
         try:
             already_merged_index = [t[0] for t in temporary_merged_recipes].index(recipe_txt)
@@ -258,9 +263,14 @@ class MechaMerger:
         else:
             fallback_model = sd_mecha.model(fallback_model)
 
+        if omit_vae and "vae" in recipe_config.components():
+            recipe_to_merge = sd_mecha.omit_component(recipe, "vae")
+        else:
+            recipe_to_merge = recipe
+
         model_management.unload_all_models()
         state_dict = sd_mecha.merge(
-            recipe=recipe,
+            recipe=recipe_to_merge,
             fallback_model=fallback_model,
             merge_device=default_merge_device if default_merge_device != "none" else None,
             merge_dtype=DTYPE_MAPPING[default_merge_dtype] if default_merge_dtype != "none" else None,
@@ -272,7 +282,7 @@ class MechaMerger:
             strict_weight_space=strict_weight_space,
             tqdm=ComfyTqdm,
         )
-        res = load_state_dict_guess_config(state_dict, embedding_directory=folder_paths.get_folder_paths("embeddings"))[:3]
+        res = load_state_dict_guess_config(state_dict, embedding_directory=folder_paths.get_folder_paths("embeddings"), output_vae=not omit_vae)[:3]
         if temporary_merge:
             temporary_merged_recipes.append((recipe_txt, res))
         return *res, recipe_txt
