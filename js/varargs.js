@@ -74,8 +74,8 @@ function handleMechaConverterVisibility(node, input_link) {
 }
 
 function handleMechaMergeMethodCacheInitByIdentifier(node, identifier, widget) {
-    widget.type = "hidden";
     setTimeout(() => {
+        widget.type = "hidden";
         widget.value = randomCacheId();
     }, 0);
 }

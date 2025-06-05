@@ -11,10 +11,19 @@ import tqdm
 from sd_mecha import open_input_dicts
 from sd_mecha.extensions import merge_methods, merge_spaces
 from sd_mecha.extensions.merge_methods import MergeMethod
+from sd_mecha.recipe_nodes import MergeRecipeNode, ModelRecipeNode, LiteralRecipeNode, RecipeNode
 from comfy import model_management
 from comfy.sd import load_state_dict_guess_config
 from typing import List, Tuple, Iterable, Any, Optional
 from . import cache_nodes
+
+
+merge_checkpointing = sd_mecha.extensions.merge_methods.resolve("merge_checkpointing")
+ALL_CONVERTERS = [m.identifier for m in merge_methods.get_all_converters()]
+INTERNAL_MERGE_METHODS = [
+    merge_checkpointing.identifier,
+]
+HIDDEN_MERGE_METHODS = ALL_CONVERTERS + INTERNAL_MERGE_METHODS
 
 
 temporary_merged_recipes: List[Tuple[str, Iterable[Any]]] = []
@@ -247,7 +256,8 @@ class MechaMerger:
         ):
             recipe_config = recipe.model_config
             try:
-                recipe_txt = sd_mecha.serialize(recipe)
+                recipe_to_serialize = recipe.accept(CleanRecipeVisitor())
+                recipe_txt = sd_mecha.serialize(recipe_to_serialize)
             except TypeError:
                 recipe_txt = str(id(recipe))
 
@@ -502,9 +512,8 @@ class MechaLoraRecipe:
 
 
 def register_merge_methods():
-    converter_ids = [m.identifier for m in merge_methods.get_all_converters()]
     for method in merge_methods.get_all():
-        if method.identifier in converter_ids:
+        if method.identifier in HIDDEN_MERGE_METHODS:
             continue
 
         method_name = method.get_identifier()
@@ -559,7 +568,24 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
                     }),
                 } if param_names.has_varargs() else {}),
                 "cache": ("MECHA_MERGE_METHOD_CACHE",),
-            }
+                "merge_checkpointing": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "Speeds up an entire branch of a merge graph that does not change often "
+                               "in exchange of memory.\n\n"
+                               "- true: store the first output of this recipe node on cpu memory in fp16. "
+                               "On subsequent workflow executions, as long as the inputs do not change, "
+                               "the cached keys are returned after being cast to the original device and dtype.\n"
+                               "- false: do not store the output. "
+                               "The recipe and its inputs will re-execute on subsequent workflow executions.\n\n"
+                               "Note that the memory used to checkpoint the output is distinct from the cache feature. "
+                               "In general, "
+                               "you probably want to either use this *or* a cache unit, but not both at the same time "
+                               "because the memory adds up.\n\n"
+                               "The difference between merge checkpointing and cache is that merge checkpointing "
+                               "completely re-merges from scratch if any input changes."
+                               "Merge checkpointing is also generally much faster than cache in the fast path.",
+                }),
+            },
         },
         "RETURN_TYPES": ("MECHA_RECIPE",),
         "RETURN_NAMES": ("recipe",),
@@ -622,8 +648,10 @@ def get_method_node_execute(method: MergeMethod):
     num_mandatory_args = len(param_names.args) - len(param_defaults.args)
 
     def execute(*_args, **kwargs):
+        global merge_checkpointing
         # private key for caching
         cache = kwargs.pop("cache", None)
+        use_merge_checkpointing = kwargs.pop("merge_checkpointing")
 
         # remove default values / merge space from keys
         # comfy nodes cannot distinguish display names from id names
@@ -650,6 +678,10 @@ def get_method_node_execute(method: MergeMethod):
             if cache.setdefault("__merge_method_identifier", method.identifier) != method.identifier:
                 raise ValueError("Merge method caches cannot be reused with different types of merge methods.")
             recipe.set_cache(cache)
+
+        if use_merge_checkpointing:
+            recipe = merge_checkpointing(recipe)
+            recipe.set_cache()
 
         return recipe,
 
@@ -682,6 +714,31 @@ def get_all_folder_paths():
         for item in ("checkpoints", "loras", "clip", "unet", "vae", "controlnet", "upscale_models")
         for p in folder_paths.get_folder_paths(item)
     ]
+
+
+class CleanRecipeVisitor(sd_mecha.recipe_nodes.RecipeVisitor):
+    def visit_literal(self, node: LiteralRecipeNode):
+        if isinstance(node.value, dict) and node.value and isinstance(next(iter(node.value.values())), RecipeNode):
+            return LiteralRecipeNode(
+                {k: v.accept(self) for k, v in node.value.items()},
+                model_config=node.model_config,
+                merge_space=node.merge_space,
+            )
+        return node
+
+    def visit_model(self, node: ModelRecipeNode):
+        return node
+
+    def visit_merge(self, node: MergeRecipeNode):
+        if node.merge_method.identifier == "merge_checkpointing":
+            underlying_node = node.args[0] if node.args else node.kwargs["a"]
+            return underlying_node.accept(self)
+        return MergeRecipeNode(
+            node.merge_method,
+            tuple(v.accept(self) for v in node.args),
+            {k: v.accept(self) for k, v in node.kwargs.items()},
+            node.cache,
+        )
 
 
 DTYPE_MAPPING = {
