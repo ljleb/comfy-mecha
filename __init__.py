@@ -2,9 +2,10 @@ import pathlib
 import importlib.util
 import sys
 import traceback
-
+from types import ModuleType
 
 extensions_path = pathlib.Path(__file__).parent / "mecha_extensions"
+sys.modules["mecha_extensions"] = ModuleType("mecha_extensions")
 for path in extensions_path.iterdir():
     is_script = path.is_file() and path.suffix == ".py"
     is_package = path.is_dir() and (path / "__init__.py").is_file()
@@ -30,9 +31,6 @@ for path in extensions_path.iterdir():
     except Exception as e:
         print(f"[comfy-mecha] could not import mecha extension {path}: {e}", file=sys.stderr)
         traceback.print_exc()
-    finally:
-        if module_name in sys.modules:
-            del sys.modules[module_name]
 
 
 from .nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS

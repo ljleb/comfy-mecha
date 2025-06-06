@@ -43,7 +43,6 @@ class MechaMergeMethodCacheUnit:
             "required": {
                 "identifier": ("STRING", {
                     "default": "",
-                    "visible": False,
                 }),
             },
         }
@@ -64,7 +63,9 @@ class MechaMergeMethodCacheUnit:
                    "Each merge method is responsible for deciding when some cache results need to be recomputed."
                    "\n\n"
                    "The cache persists as long as this node remains in the workflow, even if it is disconnected; "
-                   "if you run a workflow that doesn't include this node, its cache is cleared after execution.")
+                   "if you run a workflow that doesn't include this node, its cache is cleared after execution.\n\n"
+                   "Recreating this node from the context menu button 'Fix node (recreate)' resets the cache. "
+                   "Copy pasting the node creates a cache unit that refers to a different memory unit.")
 
     @classmethod
     def IS_CHANGED(cls, identifier):

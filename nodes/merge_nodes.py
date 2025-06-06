@@ -268,7 +268,7 @@ class MechaMerger:
             if temporary_merged_recipes:
                 free_temporary_merges(prompt_executor)
 
-        if fallback_model == "none":
+        if fallback_model == "none" or fallback_model is None:
             fallback_model = None
         else:
             fallback_model = sd_mecha.model(fallback_model)
@@ -555,6 +555,11 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
                     })
                     for default_index, name in enumerate(param_names.args[len_mandatory_args:])
                 },
+                **({
+                    f"{param_names.vararg} ({'|'.join(sorted(merge_spaces.get_identifiers(input_merge_spaces.vararg)))})": ("MECHA_RECIPE_LIST", {
+                        "default": [],
+                    }),
+                } if param_names.has_varargs() else {}),
                 **{
                     f"{name} ({default_args.kwargs[index]})": ("MECHA_RECIPE", {
                         "default": default_args.kwargs[index],
@@ -562,11 +567,6 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
                     for index, name in sorted(param_names.kwargs.items(), key=lambda t: t[0])
                     if index in default_args.kwargs
                 },
-                **({
-                    f"{param_names.vararg} ({'|'.join(sorted(merge_spaces.get_identifiers(input_merge_spaces.vararg)))})": ("MECHA_RECIPE_LIST", {
-                        "default": [],
-                    }),
-                } if param_names.has_varargs() else {}),
                 "cache": ("MECHA_MERGE_METHOD_CACHE",),
                 "merge_checkpointing": ("BOOLEAN", {
                     "default": False,
