@@ -676,7 +676,7 @@ def get_method_node_execute(method: MergeMethod):
 
         if cache is not None:
             if cache.setdefault("__merge_method_identifier", method.identifier) != method.identifier:
-                raise ValueError("Merge method caches cannot be reused with different types of merge methods.")
+                raise ValueError("Cache Units cannot be reused with different types of merge methods. Recreate the Cache Unit node or plug in one that is already compatible.")
             recipe.set_cache(cache)
 
         if use_merge_checkpointing:

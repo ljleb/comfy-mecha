@@ -1,9 +1,9 @@
 [project]
 name = "comfy-mecha"
 description = "model merging nodes powered by sd-mecha, a memory efficient merging library"
-version = "1.2.38"
+version = "1.2.39"
 license = { file = "LICENSE" }
-dependencies = ["sd-mecha==1.0.5"]
+dependencies = ["sd-mecha==1.0.10"]
 
 [project.urls]
 Repository = "https://github.com/ljleb/comfy-mecha"
