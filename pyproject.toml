@@ -1,7 +1,7 @@
 [project]
 name = "comfy-mecha"
 description = "model merging nodes powered by sd-mecha, a memory efficient merging library"
-version = "1.2.40"
+version = "1.2.41"
 license = { file = "LICENSE" }
 dependencies = ["sd-mecha==1.0.12"]
 
