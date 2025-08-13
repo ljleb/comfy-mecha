@@ -633,6 +633,35 @@ class MechaRecipeList:
         return [kwargs[f"recipe_{i}"] for i in range(count) if f"recipe_{i}" in kwargs],
 
 
+class MechaSubtractRecipeList:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "count": ("INT", {"default": 2, "min": 0, "max": MAX_VARARGS_MODELS, "step": 1}),
+                "base_recipe": ("MECHA_RECIPE",),
+            },
+            "optional": {
+                f"recipe_{i}": ("MECHA_RECIPE",)
+                for i in range(MAX_VARARGS_MODELS)
+            }
+        }
+
+    RETURN_TYPES = ("MECHA_RECIPE_LIST",)
+    RETURN_NAMES = ("recipes",)
+    FUNCTION = "execute"
+    OUTPUT_NODE = False
+    CATEGORY = "mecha"
+
+    def execute(
+        self,
+        count: int,
+        base_recipe: RecipeNode,
+        **kwargs,
+    ):
+        return [kwargs[f"recipe_{i}"] - base_recipe for i in range(count) if f"recipe_{i}" in kwargs],
+
+
 def get_all_torch_devices() -> List[str]:
     torch_device = model_management.get_torch_device().type
     return [
@@ -761,6 +790,7 @@ NODE_CLASS_MAPPINGS = {
     "Already Loaded Model Mecha Recipe": MechaAlreadyLoadedModelRecipe,
     "Lora Mecha Recipe": MechaLoraRecipe,
     "Mecha Recipe List": MechaRecipeList,
+    "Mecha Subtract Recipe List": MechaSubtractRecipeList,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -773,6 +803,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Already Loaded Model Mecha Recipe": "Already Loaded Model",
     "Lora Mecha Recipe": "Lora",
     "Mecha Recipe List": "Recipe List",
+    "Mecha Subtract Recipe List": "Subtract Recipe List",
 }
 
 register_merge_methods()

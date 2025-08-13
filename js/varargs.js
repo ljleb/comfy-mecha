@@ -9,7 +9,7 @@ const findWidgetIndexByName = (widgets, name) => {
     return widgets ? widgets.findIndex((w) => w.name === name) : null;
 };
 
-function handleMechaModelListVisibilityByCount(node, visibleCount) {
+function handleMechaModelListVisibilityByCount(node, visibleCount, _widget, countOffset=0) {
     if (node.origInputs === undefined) {
         node.origInputs = node.inputs;
     }
@@ -24,7 +24,7 @@ function handleMechaModelListVisibilityByCount(node, visibleCount) {
     }
 
     node.inputs = Array.from(node.origInputs);
-    node.inputs.length = visibleCount;
+    node.inputs.length = visibleCount + countOffset;
     const newHeight = node.computeSize()[1];
     node.setSize([node.size[0], newHeight]);
 }
@@ -101,6 +101,9 @@ function inputLogic(node, input) {
 const nodeWidgetHandlers = {
     "Mecha Recipe List": {
         "count": handleMechaModelListVisibilityByCount
+    },
+    "Mecha Subtract Recipe List": {
+        "count": (...args) => handleMechaModelListVisibilityByCount(...args, 1)
     },
     "Blocks Mecha Hyper": {
         "preset": handleMechaHyperBlocksVisibilityByPreset
