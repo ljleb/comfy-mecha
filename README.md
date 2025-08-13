@@ -60,6 +60,7 @@ Nodes used for merging. They all have `Recipe` in their name except for `Mecha M
 - `Mecha Model Recipe` loads a model as a recipe to be used as input to other recipe nodes.
 - `Mecha Lora Recipe` loads a lora model as a recipe to be used as input to other recipe nodes.
 - `Mecha Recipe List` takes an arbitrary number of recipes and returns a `MECHA_RECIPE_LIST`. It is intended to be used as input to recipe nodes that accept an arbitrary number of recipes as input, i.e. the `bounds` input of `Clip Mecha Recipe`
+- `Mecha Subtract Recipe List` is the same as `Mecha Recipe List` but takes an additional `base_recipe` input that is subtracted from all other recipe inputs. This can simplify workflows that work with multiple deltas all obtained from the same base model.
 
 ### Param Nodes
 
