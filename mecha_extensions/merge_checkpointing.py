@@ -20,12 +20,12 @@ def merge_checkpointing(
         value = a[key]
         cache[key] = {}
         if isinstance(value, torch.Tensor):
+            cache[key]["device"] = value.device
             if value.is_floating_point():
+                cache[key]["dtype"] = value.dtype
                 cache[key]["value"] = value.to(device="cpu", dtype=torch.float16)
             else:
                 cache[key]["value"] = value.to(device="cpu")
-            cache[key]["device"] = value.device
-            cache[key]["dtype"] = value.dtype
         else:
             cache[key]["value"] = value
         return value

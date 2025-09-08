@@ -87,7 +87,7 @@ class RegexWeightsMechaHyper:
                 }),
                 "regex_mode": (REGEX_MODES, {
                     "default": REGEX_MODES[0],
-                    "tooltip": '- simple: the only special character is *, which means to match any number of characters. For example, "a*f" will match "abcdef". \\* matches * literally and \\\\ matches \\ literally\n'
+                    "tooltip": '- simple: the only special character is *, which means to match any number of characters. For example, "a*n" will match "aliteration". \\* matches * literally and \\\\ matches \\ literally\n'
                                '- regex: full python regex mode. for example, ".*" matches any number of characters'
                 }),
                 "match_full_keys": ("BOOLEAN", {
