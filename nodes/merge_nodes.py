@@ -72,7 +72,7 @@ def free_temporary_merges(prompt_executor: execution.PromptExecutor):
     temporary_merged_objects = [e for t in temporary_merged_recipes for e in t[1]]
     for k, v in prompt_executor.caches.outputs.cache.copy().items():
         for v in v:
-            for v in v:
+            for v in (v or ()):
                 if v in temporary_merged_objects and k in prompt_executor.caches.outputs.cache:
                     prompt_executor.caches.outputs.cache.pop(k)
 
