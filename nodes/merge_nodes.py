@@ -501,7 +501,7 @@ class MechaLoraRecipe:
         recipe = sd_mecha.model(model_path, config=model_config)
         lora_dirs = [pathlib.Path(p) for p in folder_paths.get_folder_paths("loras")]
         with open_input_dicts(recipe, lora_dirs):
-            if recipe.model_config.identifier == "sdxl-kohya_kohya_lora":
+            if recipe.model_config.identifier in ("sdxl-kohya_kohya_lora", "sdxl-kohya_but_diffusers_kohya_lora"):
                 recipe = sd_mecha.convert(recipe, "sdxl-sgm")
             elif recipe.model_config.identifier == "sd1-kohya_kohya_lora":
                 recipe = sd_mecha.convert(recipe, "sd1-ldm")
