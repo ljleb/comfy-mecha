@@ -16,7 +16,7 @@ from comfy import model_management
 from comfy.sd import load_state_dict_guess_config
 from typing import List, Tuple, Iterable, Any, Optional
 from . import cache_nodes
-
+from .throttling import RunLastAtMostEvery
 
 merge_checkpointing = sd_mecha.extensions.merge_methods.resolve("merge_checkpointing")
 ALL_CONVERTERS = [m.identifier for m in merge_methods.get_all_converters()]
@@ -336,8 +336,13 @@ class ComfyTqdm:
         self.progress = tqdm.tqdm(*args, **kwargs)
         self.comfy_progress = comfy.utils.ProgressBar(kwargs["total"])
 
+        self.update_comfy = RunLastAtMostEvery(self.update_comfy, 1)
+
     def update(self):
         self.progress.update()
+        self.update_comfy()
+
+    def update_comfy(self):
         self.comfy_progress.update_absolute(self.progress.n, self.progress.total)
 
     def __enter__(self):
