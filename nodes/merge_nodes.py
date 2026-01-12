@@ -18,6 +18,7 @@ from typing import List, Tuple, Iterable, Any, Optional
 from . import cache_nodes
 from .throttling import RunLastAtMostEvery
 
+
 merge_checkpointing = sd_mecha.extensions.merge_methods.resolve("merge_checkpointing")
 ALL_CONVERTERS = [m.identifier for m in merge_methods.get_all_converters()]
 INTERNAL_MERGE_METHODS = [
@@ -403,13 +404,7 @@ class MechaAnyModelRecipe:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "model_path": (
-                    [
-                        f
-                        for f in folder_paths.get_filename_list("checkpoints") + folder_paths.get_filename_list("loras")
-                        if f.endswith(".safetensors")
-                    ],
-                ),
+                "model_path": (get_all_file_paths(),),
                 "model_config": (["auto"] + [config.identifier for config in sd_mecha.extensions.model_configs.get_all()],),
             },
             "optional": {
@@ -745,8 +740,17 @@ def snake_case_to_title(name: str):
 def get_all_folder_paths():
     return [
         pathlib.Path(p)
-        for item in ("checkpoints", "loras", "clip", "unet", "vae", "controlnet", "upscale_models")
+        for item in ("checkpoints", "loras", "clip", "unet", "vae")
         for p in folder_paths.get_folder_paths(item)
+    ]
+
+
+def get_all_file_paths():
+    return [
+        p
+        for item in ("checkpoints", "loras", "clip", "unet", "vae")
+        for p in folder_paths.get_filename_list(item)
+        if p.endswith(".safetensors")
     ]
 
 
