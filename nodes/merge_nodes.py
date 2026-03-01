@@ -748,7 +748,7 @@ def get_all_folder_paths():
 def get_all_file_paths():
     return [
         p
-        for item in ("checkpoints", "loras", "clip", "unet", "vae")
+        for item in ("checkpoints", "loras", "clip", "unet", "vae", "embeddings")
         for p in folder_paths.get_filename_list(item)
         if p.endswith(".safetensors")
     ]
