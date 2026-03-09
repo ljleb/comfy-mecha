@@ -740,7 +740,7 @@ def snake_case_to_title(name: str):
 def get_all_folder_paths():
     return [
         pathlib.Path(p)
-        for item in ("checkpoints", "loras", "clip", "unet", "vae", "embeddings")
+        for item in get_folder_path_ids()
         for p in folder_paths.get_folder_paths(item)
     ]
 
@@ -748,10 +748,14 @@ def get_all_folder_paths():
 def get_all_file_paths():
     return [
         p
-        for item in ("checkpoints", "loras", "clip", "unet", "vae", "embeddings")
+        for item in get_folder_path_ids()
         for p in folder_paths.get_filename_list(item)
         if p.endswith(".safetensors")
     ]
+
+
+def get_folder_path_ids() -> Tuple[str, ...]:
+    return "checkpoints", "loras", "clip", "unet", "vae", "embeddings"
 
 
 class CleanRecipeVisitor(sd_mecha.recipe_nodes.RecipeVisitor):
