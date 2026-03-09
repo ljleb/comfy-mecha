@@ -740,7 +740,7 @@ def snake_case_to_title(name: str):
 def get_all_folder_paths():
     return [
         pathlib.Path(p)
-        for item in ("checkpoints", "loras", "clip", "unet", "vae")
+        for item in ("checkpoints", "loras", "clip", "unet", "vae", "embeddings")
         for p in folder_paths.get_folder_paths(item)
     ]
 
