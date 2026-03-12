@@ -1,1 +1,1 @@
-sd-mecha==1.0.14
+sd-mecha==1.1.2

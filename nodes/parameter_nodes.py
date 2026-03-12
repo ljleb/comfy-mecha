@@ -5,6 +5,7 @@ import typing
 import sd_mecha
 from typing import List, Literal
 from sd_mecha.extensions import model_configs
+from .transport import ComfyMechaRecipe
 
 
 BLOCK_CONFIGS = {
@@ -53,13 +54,13 @@ class BlocksMechaHyper:
             default = 0.0
 
         block_config = BLOCK_CONFIGS[model_config]
-        return sd_mecha.convert(
+        return ComfyMechaRecipe(sd_mecha.convert(
             {
                 block_name: float(block.strip()) if block.strip() else default
                 for block_name, block in zip(block_config.keys(), blocks.split(","))
             } if blocks.strip() else {},
             model_config,
-        ) | default,
+        ) | default),
 
 
 RegexMode = Literal["simple", "regex"]
@@ -127,7 +128,7 @@ class RegexWeightsMechaHyper:
         else:
             recipe = sd_mecha.literal(default, model_config)
 
-        return recipe, sd_mecha.serialize(recipe)
+        return ComfyMechaRecipe(recipe), sd_mecha.serialize(recipe)
 
 
 class KeyMatcher:
@@ -246,7 +247,7 @@ class SdxlBlocksMechaHyper:
     ):
         blocks = sd_mecha.literal(kwargs, "sdxl-supermerger_blocks")
         blocks = sd_mecha.convert(blocks, "sdxl-sgm")
-        return blocks,
+        return ComfyMechaRecipe(blocks),
 
 
 class Sd1BlocksMechaHyper:
@@ -299,7 +300,7 @@ class Sd1BlocksMechaHyper:
     ):
         blocks = sd_mecha.literal(kwargs, "sd1-supermerger_blocks")
         blocks = sd_mecha.convert(blocks, "sd1-ldm")
-        return blocks,
+        return ComfyMechaRecipe(blocks),
 
 
 class FloatMechaHyper:
@@ -326,7 +327,7 @@ class FloatMechaHyper:
         self,
         value: float,
     ):
-        return value,
+        return ComfyMechaRecipe(value),
 
 
 class IntMechaHyper:
@@ -353,7 +354,7 @@ class IntMechaHyper:
         self,
         value: int,
     ):
-        return value,
+        return ComfyMechaRecipe(value),
 
 
 class StringMechaHyper:
@@ -375,7 +376,7 @@ class StringMechaHyper:
         self,
         value: str,
     ):
-        return value,
+        return ComfyMechaRecipe(value),
 
 
 class BoolMechaHyper:
@@ -397,7 +398,7 @@ class BoolMechaHyper:
         self,
         value: bool,
     ):
-        return value,
+        return ComfyMechaRecipe(value),
 
 
 def register_components_params_nodes():
@@ -443,7 +444,7 @@ def get_components_params_node_execute(config: model_configs.ModelConfig):
             sd_mecha.pick_component(sd_mecha.literal(kwargs[component_id], config), component_id)
             for component_id, component in config.components().items()
         ]
-        return functools.reduce(operator.or_, recipes),
+        return ComfyMechaRecipe(functools.reduce(operator.or_, recipes)),
     return execute
 
 

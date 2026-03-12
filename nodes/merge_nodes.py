@@ -1,3 +1,5 @@
+import dataclasses
+import operator
 import comfy
 import execution
 import folder_paths
@@ -8,23 +10,29 @@ import re
 import sd_mecha
 import torch.cuda
 import tqdm
-from sd_mecha import open_input_dicts
+from sd_mecha import open_graph
 from sd_mecha.extensions import merge_methods, merge_spaces
-from sd_mecha.extensions.merge_methods import MergeMethod
 from sd_mecha.recipe_nodes import MergeRecipeNode, ModelRecipeNode, LiteralRecipeNode, RecipeNode
 from comfy import model_management
 from comfy.sd import load_state_dict_guess_config
 from typing import List, Tuple, Iterable, Any, Optional
 from . import cache_nodes
 from .throttling import RunLastAtMostEvery
+from .transport import ComfyMechaRecipe
 
 
 merge_checkpointing = sd_mecha.extensions.merge_methods.resolve("merge_checkpointing")
 ALL_CONVERTERS = [m.identifier for m in merge_methods.get_all_converters()]
+ALL_INTERFACE_IMPLEMENTATIONS = [
+    candidate[0].identifier
+    for m in merge_methods.get_all()
+    if m.interface is not None
+    for candidate in m.interface.candidates
+]
 INTERNAL_MERGE_METHODS = [
     merge_checkpointing.identifier,
 ]
-HIDDEN_MERGE_METHODS = ALL_CONVERTERS + INTERNAL_MERGE_METHODS
+HIDDEN_MERGE_METHODS = ALL_CONVERTERS + ALL_INTERFACE_IMPLEMENTATIONS + INTERNAL_MERGE_METHODS
 
 
 temporary_merged_recipes: List[Tuple[str, Iterable[Any]]] = []
@@ -109,12 +117,8 @@ class MechaSerializer:
     OUTPUT_NODE = False
     CATEGORY = "mecha"
 
-    def execute(self, recipe):
-        with open_input_dicts(
-            recipe,
-            get_all_folder_paths(),
-        ):
-            return sd_mecha.serialize(recipe),
+    def execute(self, recipe: ComfyMechaRecipe):
+        return sd_mecha.serialize(recipe.node),
 
 
 class MechaDeserializer:
@@ -137,7 +141,7 @@ class MechaDeserializer:
     CATEGORY = "mecha"
 
     def execute(self, recipe_txt: str):
-        return sd_mecha.deserialize(recipe_txt.split("\n")),
+        return ComfyMechaRecipe(sd_mecha.deserialize(recipe_txt.split("\n"))),
 
 
 class MechaConverter:
@@ -159,7 +163,7 @@ class MechaConverter:
     OUTPUT_NODE = False
     CATEGORY = "mecha"
 
-    def execute(self, recipe: str, **kwargs):
+    def execute(self, recipe: ComfyMechaRecipe, **kwargs):
         if "target_config_from_recipe_override" in kwargs:
             config_object = kwargs["target_config_from_recipe_override"]
         elif "target_config" in kwargs:
@@ -169,10 +173,12 @@ class MechaConverter:
                 "Neither 'target_config_from_recipe_override' nor 'target_config' are in kwargs. "
                 f"This shouldn't ever happen but if it somehow does, here are the kwargs: {kwargs}"
             )
-        return sd_mecha.convert(
+        return dataclasses.replace(
             recipe,
-            config_object,
-            model_dirs=get_all_folder_paths(),
+            node=sd_mecha.convert(
+                recipe.node,
+                config_object,
+            )
         ),
 
 
@@ -191,7 +197,7 @@ class MechaMerger:
                     "default": main_torch_device,
                 }),
                 "default_merge_dtype": (["none"] + list(DTYPE_MAPPING.keys()), {
-                    "default": "fp64",
+                    "default": "fp32",
                 }),
                 "output_device": (["none"] + all_torch_devices, {
                     "default": "cpu",
@@ -235,7 +241,7 @@ class MechaMerger:
 
     def execute(
         self,
-        recipe: sd_mecha.recipe_nodes.RecipeNode,
+        recipe: ComfyMechaRecipe,
         fallback_model: str,
         output_device: str,
         output_dtype: str,
@@ -249,18 +255,14 @@ class MechaMerger:
     ):
         global temporary_merged_recipes, prompt_executor
         total_buffer_size = memory_to_bytes(total_buffer_size)
-        recipe = sd_mecha.value_to_node(recipe)
+        cache = recipe.cache
+        recipe = sd_mecha.value_to_node(recipe.node)
 
-        with open_input_dicts(
-            recipe,
-            get_all_folder_paths(),
-        ):
-            recipe_config = recipe.model_config
-            try:
-                recipe_to_serialize = recipe.accept(CleanRecipeVisitor())
-                recipe_txt = sd_mecha.serialize(recipe_to_serialize)
-            except TypeError:
-                recipe_txt = str(id(recipe))
+        try:
+            recipe_to_serialize = recipe.accept(CleanRecipeVisitor())
+            recipe_txt = sd_mecha.serialize(recipe_to_serialize)
+        except TypeError:
+            recipe_txt = str(id(recipe))
 
         try:
             already_merged_index = [t[0] for t in temporary_merged_recipes].index(recipe_txt)
@@ -273,6 +275,17 @@ class MechaMerger:
             fallback_model = None
         else:
             fallback_model = sd_mecha.model(fallback_model)
+
+        with open_graph(
+            recipe,
+            root_only=True,
+            solve_merge_space=False,
+        ) as graph:
+            recipe_config = next(iter(graph.root_candidates(
+                model_config_preference=("singleton-mecha",),
+                merge_space="weight" if strict_weight_space else None,
+                merge_space_preference=("weight",) if not strict_weight_space else None,
+            ).model_config))
 
         if omit_vae and "vae" in recipe_config.components():
             recipe_to_merge = sd_mecha.omit_component(recipe, "vae")
@@ -289,8 +302,9 @@ class MechaMerger:
             output_dtype=DTYPE_MAPPING[output_dtype] if output_dtype != "none" else None,
             threads=threads if threads >= 0 else None,
             total_buffer_size=total_buffer_size,
-            model_dirs=get_all_folder_paths(),
+            cache=cache,
             strict_weight_space=strict_weight_space,
+            check_mandatory_keys=False,
             tqdm=ComfyTqdm,
         )
         res = load_state_dict_guess_config(state_dict, embedding_directory=folder_paths.get_folder_paths("embeddings"), output_vae=not omit_vae)[:3]
@@ -396,7 +410,7 @@ class MechaModelRecipe:
     ):
         if model_config == "auto":
             model_config = None
-        return sd_mecha.model(model_path, config=model_config),
+        return ComfyMechaRecipe(sd_mecha.model(model_path, config=model_config)),
 
 
 class MechaAnyModelRecipe:
@@ -430,7 +444,7 @@ class MechaAnyModelRecipe:
             merge_space = "weight"
         if model_config == "auto":
             model_config = None
-        return sd_mecha.model(model_path, config=model_config, merge_space=merge_space),
+        return ComfyMechaRecipe(sd_mecha.model(model_path, config=model_config, merge_space=merge_space)),
 
 
 class MechaAlreadyLoadedModelRecipe:
@@ -469,7 +483,7 @@ class MechaAlreadyLoadedModelRecipe:
 
         model_management.load_models_gpu(load_models, force_patch_weights=True)
         sd = model.model.state_dict_for_saving(clip_sd, vae_sd, None)
-        return sd_mecha.model(sd),
+        return ComfyMechaRecipe(sd_mecha.model(sd)),
 
 
 class MechaLoraRecipe:
@@ -499,16 +513,16 @@ class MechaLoraRecipe:
             model_config = None
 
         recipe = sd_mecha.model(model_path, config=model_config)
-        lora_dirs = [pathlib.Path(p) for p in folder_paths.get_folder_paths("loras")]
-        with open_input_dicts(recipe, lora_dirs):
-            if recipe.model_config.identifier in ("sdxl-kohya_kohya_lora", "sdxl-kohya_but_diffusers_kohya_lora"):
+        with open_graph(recipe, root_only=True, solve_merge_space=False) as graph:
+            candidates = list(graph.root_candidates().model_config)
+            if any(candidate.identifier in ("sdxl-kohya_kohya_lora", "sdxl-kohya_but_diffusers_kohya_lora") for candidate in candidates):
                 recipe = sd_mecha.convert(recipe, "sdxl-sgm")
-            elif recipe.model_config.identifier == "sd1-kohya_kohya_lora":
+            elif any(candidate.identifier == "sd1-kohya_kohya_lora" for candidate in candidates):
                 recipe = sd_mecha.convert(recipe, "sd1-ldm")
             else:
                 raise RuntimeError(f"unsupported lora model config: {recipe.model_config.identifier}")
 
-        return recipe,
+        return ComfyMechaRecipe(recipe),
 
 
 def register_merge_methods():
@@ -528,7 +542,7 @@ def register_merge_methods():
         NODE_DISPLAY_NAME_MAPPINGS[title_name] = short_title_name
 
 
-def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
+def make_comfy_node_class(class_name: str, method: merge_methods.MergeMethod) -> type:
     param_names = method.get_param_names()
     input_merge_spaces = method.get_input_merge_spaces()
     merge_spaces_dict = input_merge_spaces.as_dict(0)
@@ -539,7 +553,7 @@ def make_comfy_node_class(class_name: str, method: MergeMethod) -> type:
         "INPUT_TYPES": lambda: {
             "required": {
                 **{
-                    f"{fix_param_name(name)} ({'|'.join(sorted(merge_spaces.get_identifiers(merge_spaces_dict[index])))})": ("MECHA_RECIPE",)
+                    f"{name} ({'|'.join(sorted(merge_spaces.get_identifiers(merge_spaces_dict[index])))})": ("MECHA_RECIPE",)
                     for index, name in enumerate(param_names.args[:len_mandatory_args])
                 },
                 **{
@@ -630,7 +644,10 @@ class MechaRecipeList:
         count: int,
         **kwargs,
     ):
-        return [kwargs[f"recipe_{i}"] for i in range(count) if f"recipe_{i}" in kwargs],
+        return [
+            kwargs[f"recipe_{i}"]
+            for i in range(count) if f"recipe_{i}" in kwargs
+        ],
 
 
 class MechaSubtractRecipeList:
@@ -656,10 +673,16 @@ class MechaSubtractRecipeList:
     def execute(
         self,
         count: int,
-        base_recipe: RecipeNode,
+        base_recipe: ComfyMechaRecipe,
         **kwargs,
     ):
-        return [kwargs[f"recipe_{i}"] - base_recipe for i in range(count) if f"recipe_{i}" in kwargs],
+        return [
+            ComfyMechaRecipe(
+                kwargs[f"recipe_{i}"].node - base_recipe.node,
+                kwargs[f"recipe_{i}"].cache | base_recipe.cache,
+            )
+            for i in range(count) if f"recipe_{i}" in kwargs
+        ],
 
 
 def get_all_torch_devices() -> List[str]:
@@ -671,7 +694,7 @@ def get_all_torch_devices() -> List[str]:
     ]
 
 
-def get_method_node_execute(method: MergeMethod):
+def get_method_node_execute(method: merge_methods.MergeMethod):
     param_names = method.get_param_names()
     param_defaults = method.get_default_args()
     num_mandatory_args = len(param_names.args) - len(param_defaults.args)
@@ -679,7 +702,7 @@ def get_method_node_execute(method: MergeMethod):
     def execute(*_args, **kwargs):
         global merge_checkpointing
         # private key for caching
-        cache = kwargs.pop("cache", None)
+        cache_node = kwargs.pop("cache", None)
         use_merge_checkpointing = kwargs.pop("merge_checkpointing")
 
         # remove default values / merge space from keys
@@ -690,29 +713,34 @@ def get_method_node_execute(method: MergeMethod):
                 new_k = k.split(" ")[0]
                 kwargs[new_k] = kwargs.pop(k)
 
+        cache_all = functools.reduce(operator.or_, (v.cache for v in kwargs.values()), {})
         args = [
-            kwargs.pop(fix_param_name(k))
+            kwargs.pop(k).node
             if i < num_mandatory_args else
-            kwargs.pop(fix_param_name(k), param_defaults.args[i - num_mandatory_args])
+            kwargs.pop(k, ComfyMechaRecipe(param_defaults.args[i - num_mandatory_args])).node
             for i, k in enumerate(param_names.args)
         ]
         if param_names.has_varargs():
-            args += kwargs.pop(param_names.vararg, ())
+            args += (v.node for v in kwargs.pop(param_names.vararg, ()))
+        kwargs = {
+            k: v.node
+            for k, v in kwargs.items()
+        }
 
-        recipe = method(*args, **kwargs)
+        node = method(*args, **kwargs)
         if method.identifier == "add_difference" and args:
-            recipe = recipe | args[0]
+            node = node | args[0]
 
-        if cache is not None:
-            if cache.setdefault("__merge_method_identifier", method.identifier) != method.identifier:
+        if cache_node is not None:
+            if cache_node.setdefault("__merge_method_identifier", method.identifier) != method.identifier:
                 raise ValueError("Cache Units cannot be reused with different types of merge methods. Recreate the Cache Unit node or plug in one that is already compatible.")
-            recipe.set_cache(cache)
+            cache_all[node] = cache_node
 
         if use_merge_checkpointing:
-            recipe = merge_checkpointing(recipe)
-            recipe.set_cache()
+            node = merge_checkpointing(node)
+            cache_all[node] = {}
 
-        return recipe,
+        return ComfyMechaRecipe(node, cache_all),
 
     return execute
 
@@ -758,28 +786,46 @@ def get_folder_path_ids() -> Tuple[str, ...]:
     return "checkpoints", "loras", "clip", "unet", "vae", "embeddings"
 
 
+for p in get_all_folder_paths():
+    if p not in sd_mecha.extensions.model_dirs.get_all():
+        sd_mecha.extensions.model_dirs.add_path(p)
+
+
 class CleanRecipeVisitor(sd_mecha.recipe_nodes.RecipeVisitor):
     def visit_literal(self, node: LiteralRecipeNode):
-        if isinstance(node.value, dict) and node.value and isinstance(next(iter(node.value.values())), RecipeNode):
+        new_dict = {}
+        changed = False
+        for k, v in node.value_dict.items():
+            if isinstance(v, RecipeNode):
+                new_dict[k] = v.accept(self)
+                changed = True
+            else:
+                new_dict[k] = v
+
+        if changed:
             return LiteralRecipeNode(
-                {k: v.accept(self) for k, v in node.value.items()},
+                new_dict,
                 model_config=node.model_config,
                 merge_space=node.merge_space,
             )
-        return node
+        else:
+            return node
 
     def visit_model(self, node: ModelRecipeNode):
         return node
 
     def visit_merge(self, node: MergeRecipeNode):
         if node.merge_method.identifier == "merge_checkpointing":
-            underlying_node = node.args[0] if node.args else node.kwargs["a"]
+            underlying_node = node.bound_args.arguments["a"]
             return underlying_node.accept(self)
         return MergeRecipeNode(
             node.merge_method,
-            tuple(v.accept(self) for v in node.args),
-            {k: v.accept(self) for k, v in node.kwargs.items()},
-            node.cache,
+            node.bound_args.signature.bind(
+                *(v.accept(self) for v in node.bound_args.args),
+                **{k: v.accept(self) for k, v in node.bound_args.kwargs.items()},
+            ),
+            node.model_config,
+            node.merge_space,
         )
 
 

@@ -1,21 +1,8 @@
+from collections import defaultdict
 from typing import Dict
-from sd_mecha.recipe_nodes import RecipeVisitor, MergeRecipeNode, ModelRecipeNode, LiteralRecipeNode
 
 
 CACHE_OBJECT_KEY = "__merge_method_cache_object"
-
-
-class MarkCachesVisitor(RecipeVisitor):
-    def visit_literal(self, node: LiteralRecipeNode):
-        pass
-
-    def visit_model(self, node: ModelRecipeNode):
-        pass
-
-    def visit_merge(self, node: MergeRecipeNode):
-        cache = node.cache.get(CACHE_OBJECT_KEY)
-        if cache is not None:
-            cache.mark()
 
 
 class MergeMethodCache:
@@ -33,7 +20,7 @@ class MergeMethodCache:
         self.marked = False
 
 
-merge_method_caches: Dict[str, MergeMethodCache] = {}
+merge_method_caches: Dict[str, MergeMethodCache] = defaultdict(MergeMethodCache)
 
 
 class MechaMergeMethodCacheUnit:
