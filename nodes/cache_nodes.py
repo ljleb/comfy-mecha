@@ -59,14 +59,12 @@ class MechaMergeMethodCacheUnit:
         if identifier is None:
             return ""
 
-        cache = merge_method_caches.setdefault(identifier, MergeMethodCache())
-        cache.mark()
-
+        merge_method_caches[identifier].mark()
         return ""
 
     @classmethod
     def execute(cls, identifier):
-        return merge_method_caches.setdefault(identifier, MergeMethodCache()).cache,
+        return merge_method_caches[identifier].cache,
 
 
 NODE_CLASS_MAPPINGS = {
