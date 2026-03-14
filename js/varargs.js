@@ -39,11 +39,9 @@ function handleMechaHyperBlocksVisibilityByPreset(node, preset) {
         node.origWidgets[findWidgetIndexByName(node.origWidgets, widget.name)] = widget;
     }
 
-    if (preset === "custom") {
-        node.widgets = Array.from(node.origWidgets);
-    } else {
-        node.widgets = Array.from(node.origWidgets);
+    node.widgets = Array.from(node.origWidgets);
 
+    if (preset !== "custom") {
         const blocksWidgetIndex = findWidgetIndexByName(node.widgets, "blocks");
         node.widgets.splice(blocksWidgetIndex, 1);
 

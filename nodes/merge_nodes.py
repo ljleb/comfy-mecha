@@ -14,6 +14,7 @@ from sd_mecha import open_graph
 from sd_mecha.extensions import merge_methods, merge_spaces
 from sd_mecha.recipe_nodes import MergeRecipeNode, ModelRecipeNode, LiteralRecipeNode, RecipeNode
 from comfy import model_management
+from comfy.model_patcher import LazyCastingParam
 from comfy.sd import load_state_dict_guess_config
 from typing import List, Tuple, Iterable, Any, Optional
 from . import cache_nodes
@@ -165,7 +166,7 @@ class MechaConverter:
 
     def execute(self, recipe: ComfyMechaRecipe, **kwargs):
         if "target_config_from_recipe_override" in kwargs:
-            config_object = kwargs["target_config_from_recipe_override"]
+            config_object = kwargs["target_config_from_recipe_override"].node
         elif "target_config" in kwargs:
             config_object = kwargs["target_config"]
         else:
@@ -190,6 +191,8 @@ class MechaMerger:
         return {
             "required": {
                 "recipe": ("MECHA_RECIPE",),
+            },
+            "optional": {
                 "fallback_model": (["none"] + [f for f in folder_paths.get_filename_list("checkpoints") if f.endswith(".safetensors")], {
                     "default": "none",
                 }),
@@ -223,6 +226,15 @@ class MechaMerger:
                 "strict_weight_space": ("BOOLEAN", {
                     "default": True,
                 }),
+                "check_finite_output": ("BOOLEAN", {
+                    "default": True,
+                }),
+                "omit_non_finite_inputs": ("BOOLEAN", {
+                    "default": True,
+                }),
+                "memoize_intermediates": ("BOOLEAN", {
+                    "default": True,
+                }),
             },
         }
 
@@ -252,15 +264,29 @@ class MechaMerger:
         omit_vae: bool,
         temporary_merge: bool,
         strict_weight_space: bool,
+        **kwargs,
     ):
+        check_finite_output: bool = kwargs.get("check_finite_output", True)
+        omit_non_finite_inputs: bool = kwargs.get("omit_non_finite_inputs", True)
+        memoize_intermediates: bool = kwargs.get("memoize_intermediates", True)
+
         global temporary_merged_recipes, prompt_executor
         total_buffer_size = memory_to_bytes(total_buffer_size)
         cache = recipe.cache
         recipe = sd_mecha.value_to_node(recipe.node)
 
+        recipe_to_serialize = recipe.accept(CleanRecipeVisitor())
+        with open_graph(recipe_to_serialize) as graph:
+            recipe_to_serialize = graph.finalize_root(
+                model_config_preference=("singleton-mecha",),
+                merge_space="weight" if strict_weight_space else None,
+                merge_space_preference=("weight",) if not strict_weight_space else None,
+                check_mandatory_keys=False,
+                check_extra_keys=False,
+            )
+
         try:
-            recipe_to_serialize = recipe.accept(CleanRecipeVisitor())
-            recipe_txt = sd_mecha.serialize(recipe_to_serialize)
+            recipe_txt = sd_mecha.serialize(recipe_to_serialize, finalize=False)
         except TypeError:
             recipe_txt = str(id(recipe))
 
@@ -271,41 +297,27 @@ class MechaMerger:
             if temporary_merged_recipes:
                 free_temporary_merges(prompt_executor)
 
-        if fallback_model == "none" or fallback_model is None:
-            fallback_model = None
-        else:
-            fallback_model = sd_mecha.model(fallback_model)
-
-        with open_graph(
-            recipe,
-            root_only=True,
-            solve_merge_space=False,
-        ) as graph:
-            recipe_config = next(iter(graph.root_candidates(
-                model_config_preference=("singleton-mecha",),
-                merge_space="weight" if strict_weight_space else None,
-                merge_space_preference=("weight",) if not strict_weight_space else None,
-            ).model_config))
-
-        if omit_vae and "vae" in recipe_config.components():
-            recipe_to_merge = sd_mecha.omit_component(recipe, "vae")
-        else:
-            recipe_to_merge = recipe
+        if omit_vae and "vae" in recipe_to_serialize.model_config.components():
+            recipe = sd_mecha.omit_component(recipe, "vae")
 
         model_management.unload_all_models()
         state_dict = sd_mecha.merge(
-            recipe=recipe_to_merge,
-            fallback_model=fallback_model,
+            recipe=recipe,
+            fallback_model=fallback_model if fallback_model != "none" else None,
             merge_device=default_merge_device if default_merge_device != "none" else None,
             merge_dtype=DTYPE_MAPPING[default_merge_dtype] if default_merge_dtype != "none" else None,
             output_device=output_device if output_device != "none" else None,
             output_dtype=DTYPE_MAPPING[output_dtype] if output_dtype != "none" else None,
             threads=threads if threads >= 0 else None,
             total_buffer_size=total_buffer_size,
-            cache=cache,
-            strict_weight_space=strict_weight_space,
-            check_mandatory_keys=False,
+            strict_merge_space="weight" if strict_weight_space else None,
+            strict_mandatory_keys=False,
+            check_extra_keys=False,
+            check_finite_output=check_finite_output,
+            omit_non_finite_inputs=omit_non_finite_inputs,
+            memoize_intermediates=memoize_intermediates,
             tqdm=ComfyTqdm,
+            cache=cache,
         )
         res = load_state_dict_guess_config(state_dict, embedding_directory=folder_paths.get_folder_paths("embeddings"), output_vae=not omit_vae)[:3]
         if temporary_merge:
@@ -481,9 +493,23 @@ class MechaAlreadyLoadedModelRecipe:
         if vae is not None:
             vae_sd = vae.get_sd()
 
-        model_management.load_models_gpu(load_models, force_patch_weights=True)
-        sd = model.model.state_dict_for_saving(clip_sd, vae_sd, None)
-        return ComfyMechaRecipe(sd_mecha.model(sd)),
+        model_management.load_models_gpu(load_models)
+        lazy_casting_params = model.state_dict_for_saving(clip_sd, vae_sd)
+
+        @sd_mecha.merge_method(register=False)
+        def load_lazy_casting_param(
+            _: sd_mecha.Parameter(torch.Tensor),
+            **kwargs,
+        ) -> sd_mecha.Return(torch.Tensor):
+            key = kwargs["key"]
+            return lazy_casting_params[key].to()
+
+        sd = load_lazy_casting_param({
+            key: tensor.as_subclass(torch.Tensor)
+            for key, tensor in lazy_casting_params.items()
+        })
+
+        return ComfyMechaRecipe(sd),
 
 
 class MechaLoraRecipe:
@@ -581,7 +607,7 @@ def make_comfy_node_class(class_name: str, method: merge_methods.MergeMethod) ->
                     for index, name in sorted(param_names.kwargs.items(), key=lambda t: t[0])
                     if index in default_args.kwargs
                 },
-                "cache": ("MECHA_MERGE_METHOD_CACHE",),
+                **({"cache": ("MECHA_MERGE_METHOD_CACHE",)} if method.create_cache() is not None else {}),
                 "merge_checkpointing": ("BOOLEAN", {
                     "default": False,
                     "tooltip": "Speeds up an entire branch of a merge graph that does not change often "
