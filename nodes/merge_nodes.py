@@ -776,7 +776,7 @@ def get_method_node_execute(method: merge_methods.MergeMethod):
         if isinstance(recipe, ComfyMechaRecipe):
             return recipe.cache
         if isinstance(recipe, list):
-            return functools.reduce(operator.or_, (collect_cache(v) for v in value), {})
+            return functools.reduce(operator.or_, (collect_cache(v) for v in recipe), {})
         return {}
 
     return execute
