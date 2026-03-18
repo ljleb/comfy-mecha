@@ -743,7 +743,7 @@ def get_method_node_execute(method: merge_methods.MergeMethod):
                 new_k = k.split(" ")[0]
                 kwargs[new_k] = kwargs.pop(k)
 
-        cache_all = functools.reduce(operator.or_, (v.cache for v in kwargs.values()), {})
+        cache_all = functools.reduce(operator.or_, (collect_cache(v) for v in kwargs.values()), {})
         args = [
             kwargs.pop(k).node
             if i < num_mandatory_args else
@@ -771,6 +771,13 @@ def get_method_node_execute(method: merge_methods.MergeMethod):
             cache_all[node] = {}
 
         return ComfyMechaRecipe(node, cache_all),
+
+    def collect_cache(recipe):
+        if isinstance(recipe, ComfyMechaRecipe):
+            return recipe.cache
+        if isinstance(recipe, list):
+            return functools.reduce(operator.or_, (collect_cache(v) for v in value), {})
+        return {}
 
     return execute
 
