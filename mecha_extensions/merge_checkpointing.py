@@ -6,7 +6,7 @@ from sd_mecha import merge_method, Parameter, Return, StateDict
 T = TypeVar("T")
 
 
-@merge_method
+@merge_method(cache_factory=dict)
 def merge_checkpointing(
     a: Parameter(StateDict[T]),
     **kwargs,

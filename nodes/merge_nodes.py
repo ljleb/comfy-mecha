@@ -768,7 +768,7 @@ def get_method_node_execute(method: merge_methods.MergeMethod):
 
         if use_merge_checkpointing:
             node = merge_checkpointing(node)
-            cache_all[node] = {}
+            cache_all[node] = node.create_cache()
 
         return ComfyMechaRecipe(node, cache_all),
 
