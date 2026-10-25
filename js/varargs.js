@@ -5,10 +5,6 @@ let customDefInputNames = {};
 
 const MAX_VARARGS_MODELS = 64;  // arbitrary limit to n-models methods (open an issue if this is a problem)
 
-const findWidgetIndexByName = (widgets, name) => {
-    return widgets ? widgets.findIndex((w) => w.name === name) : null;
-};
-
 function handleMechaModelListVisibilityByCount(node, visibleCount, _widget, countOffset=0) {
     if (node.origInputs === undefined) {
         node.origInputs = node.inputs;
@@ -30,26 +26,19 @@ function handleMechaModelListVisibilityByCount(node, visibleCount, _widget, coun
 }
 
 function handleMechaHyperBlocksVisibilityByPreset(node, preset) {
-    if (node.origWidgets === undefined) {
-        node.origWidgets = node.widgets;
-    }
-
-    for (let i = 0; i < node.widgets.length; ++i) {
-        const widget = node.widgets[i];
-        node.origWidgets[findWidgetIndexByName(node.origWidgets, widget.name)] = widget;
-    }
-
-    node.widgets = Array.from(node.origWidgets);
-
-    if (preset !== "custom") {
-        const blocksWidgetIndex = findWidgetIndexByName(node.widgets, "blocks");
-        node.widgets.splice(blocksWidgetIndex, 1);
-
-        const validateNumBlocksWidgetIndex = findWidgetIndexByName(node.widgets, "validate_num_blocks");
-        node.widgets.splice(validateNumBlocksWidgetIndex, 1);
-
-        const defaultWidgetIndex = findWidgetIndexByName(node.widgets, "default");
-        node.widgets.splice(defaultWidgetIndex, 1);
+    // Hide the preset-specific widgets in place (type = "hidden") rather than splicing them
+    // out of node.widgets. Nothing is removed from the array, so no master copy is needed and
+    // switching back to "custom" simply restores each widget's original type.
+    const hiddenNames = ["blocks", "validate_num_blocks", "default"];
+    for (const w of node.widgets || []) {
+        if (!hiddenNames.includes(w.name)) continue;
+        if (preset !== "custom") {
+            if (w._mechaOrigType === undefined) w._mechaOrigType = w.type;
+            w.type = "hidden";
+        } else if (w._mechaOrigType !== undefined) {
+            w.type = w._mechaOrigType;
+            w._mechaOrigType = undefined;
+        }
     }
 
     const newHeight = node.computeSize()[1];
@@ -57,14 +46,24 @@ function handleMechaHyperBlocksVisibilityByPreset(node, preset) {
 }
 
 function handleMechaConverterVisibility(node, input_link) {
-    if (node.origWidgets === undefined) {
-        node.origWidgets = node.widgets;
-    }
-
     if (input_link !== null) {
-        node.widgets = [];
-    } else {
-        node.widgets = node.origWidgets;
+        // Hide widgets in place. Capture the original types once so we can restore them.
+        // Mutating widget.type avoids swapping node.widgets, which breaks on frontends where
+        // node.widgets is a reactive proxy (the saved reference ends up empty and won't render).
+        if (!node._mechaHidden) {
+            node._mechaHidden = true;
+            node._mechaWidgetTypes = (node.widgets || []).map((w) => w.type);
+            for (const w of node.widgets || []) {
+                w.type = "hidden";
+            }
+        }
+    } else if (node._mechaHidden) {
+        const types = node._mechaWidgetTypes;
+        node._mechaHidden = false;
+        node._mechaWidgetTypes = undefined;
+        for (let i = 0; i < (node.widgets || []).length && i < types.length; ++i) {
+            if (node.widgets[i]) node.widgets[i].type = types[i];
+        }
     }
 
     const newHeight = node.computeSize()[1];
@@ -83,14 +82,14 @@ function handleMechaConverterVisibilityByConnection(node, input) {
 }
 
 function widgetLogic(node, widget, value) {
-    const handler = nodeWidgetHandlers[node.comfyClass]?.[widget.name];
+    const handler = nodeWidgetHandlers[node.comfyClass || node.type]?.[widget.name];
     if (handler) {
         handler(node, value, widget);
     }
 }
 
 function inputLogic(node, input) {
-    const handler = nodeInputHandlers[node.comfyClass]?.[input.name];
+    const handler = nodeInputHandlers[node.comfyClass || node.type]?.[input.name];
     if (handler) {
         handler(node, input);
     }
@@ -152,6 +151,16 @@ app.registerExtension({
                 }
             }
         }
+
+        if (nodeData.name in nodeInputHandlers) {
+            const originalOnConnectionsChange = nodeType.prototype.onConnectionsChange;
+            nodeType.prototype.onConnectionsChange = function (side, slot, connect, link_info, output) {
+                if (side === 1 && this.inputs?.[slot]) {
+                    inputLogic(this, this.inputs[slot]);
+                }
+                return originalOnConnectionsChange?.apply(this, arguments);
+            };
+        }
     },
     loadedGraphNode(node, app) {
         for (const iv of (node.inputs || []).slice()) {
@@ -175,26 +184,7 @@ app.registerExtension({
         }
 
         for (const iv of (node.inputs || []).slice()) {
-            let inputLink = iv.link;
-            let originalDescriptor = Object.getOwnPropertyDescriptor(iv, 'link');
             inputLogic(node, iv);
-
-            Object.defineProperty(iv, 'link', {
-                get() {
-                    return originalDescriptor && originalDescriptor.get
-                        ? originalDescriptor.get.call(iv)
-                        : inputLink;
-                },
-                set(newVal) {
-                    if (originalDescriptor && originalDescriptor.set) {
-                        originalDescriptor.set.call(iv, newVal);
-                    } else {
-                        inputLink = newVal;
-                    }
-
-                    inputLogic(node, iv);
-                }
-            });
         }
     },
 });
