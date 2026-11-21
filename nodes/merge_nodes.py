@@ -6,6 +6,7 @@ import folder_paths
 import functools
 import gc
 import pathlib
+import random
 import re
 import sd_mecha
 import torch.cuda
@@ -679,6 +680,99 @@ class MechaRecipeList:
             for i in range(count) if f"recipe_{i}" in kwargs
         ],
 
+MAX_RECIPE_LISTS = 16
+class MechaCombineRecipeLists:
+    DESCRIPTION = "Combine multiple MECHA_RECIPE_LIST inputs into a single list, preserving slot index order (list 0 first, then list 1, ...). Every connected recipe_list_N slot is read automatically; there is no count to set. Unconnected and empty slots are silently skipped."
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {},
+            "optional": {
+                f"recipe_list_{i}": (
+                    "MECHA_RECIPE_LIST",
+                    {"tooltip": f"Optional recipe list to append (slot {i}). Unconnected or empty slots are skipped. Lists are concatenated in slot-index order."}
+                )
+                for i in range(MAX_RECIPE_LISTS)
+            },
+        }
+
+    RETURN_TYPES = ("MECHA_RECIPE_LIST",)
+    RETURN_NAMES = ("recipes",)
+    FUNCTION = "execute"
+    OUTPUT_NODE = False
+    CATEGORY = "mecha"
+
+    def execute(self, **kwargs):
+        combined = []
+        for i in range(MAX_RECIPE_LISTS):
+            lst = kwargs.get(f"recipe_list_{i}")
+            if not lst:
+                continue
+            combined.extend(lst)
+        return (combined,)
+
+class MechaRecipeListDropout:
+    DESCRIPTION = "Randomly drop recipes from a MECHA_RECIPE_LIST. Processing order: dropout, then enforce minimum floor, then enforce maximum cap. The whole operation is seeded and reproducible. The floor always wins over the cap if both are set."
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "recipes": (
+                    "MECHA_RECIPE_LIST",
+                    {"tooltip": "The recipe list to filter."},
+                ),
+                "seed": (
+                    "INT",
+                    {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFFF, "step": 1, "tooltip": "RNG seed. Same seed + same input list + same dropout/minimum/maximum yields the same surviving set every run."},
+                ),
+                "dropout": (
+                    "FLOAT",
+                    {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Probability of removing each recipe. 0.0 keeps all, 1.0 drops all (subject to minimum), 0.5 removes roughly half."},
+                ),
+                "minimum": (
+                    "INT",
+                    {"default": 1, "min": 0, "max": 0x7FFFFFFF, "step": 1, "tooltip": "Floor on the surviving count. If dropout leaves fewer than this, dropped items are randomly re-introduced (same seed) until the floor is met. Clamped to the input list length. 0 disables the floor."},
+                ),
+                "maximum": (
+                    "INT",
+                    {"default": -1, "min": -1, "max": 0x7FFFFFFF, "step": 1, "tooltip": "Cap on the surviving count, applied after the floor. -1 (default) means inactive. When >= 0, items are randomly trimmed down to the cap if exceeded; survivors keep their original relative order. Clamped up to the floor if set below it, so the minimum guarantee is never violated."},
+                ),
+            }
+        }
+
+    RETURN_TYPES = ("MECHA_RECIPE_LIST",)
+    RETURN_NAMES = ("recipes",)
+    FUNCTION = "execute"
+    OUTPUT_NODE = False
+    CATEGORY = "mecha"
+
+    def execute(self, recipes, seed: int, dropout: float, minimum: int, maximum: int = -1):
+        rng = random.Random(seed)
+        kept = []
+        dropped = []
+        for r in recipes:
+            if rng.random() >= dropout:
+                kept.append(r)
+            else:
+                dropped.append(r)
+
+        floor = min(minimum, len(recipes))
+        if len(kept) < floor and dropped:
+            deficit = floor - len(kept)
+            reintroduced = rng.sample(dropped, min(deficit, len(dropped)))
+            kept.extend(reintroduced)
+
+        if maximum >= 0:
+            cap = max(maximum, floor)
+            if len(kept) > cap:
+                indices = list(range(len(kept)))
+                rng.shuffle(indices)
+                survivors = sorted(indices[:cap])
+                kept = [kept[i] for i in survivors]
+
+        return (kept,)
 
 class MechaSubtractRecipeList:
     @classmethod
@@ -885,7 +979,9 @@ NODE_CLASS_MAPPINGS = {
     "Any Model Mecha Recipe": MechaAnyModelRecipe,
     "Already Loaded Model Mecha Recipe": MechaAlreadyLoadedModelRecipe,
     "Lora Mecha Recipe": MechaLoraRecipe,
-    "Mecha Recipe List": MechaRecipeList,
+    "Mecha Recipe List": MechaRecipeList,    
+    "Mecha Combine Recipe Lists": MechaCombineRecipeLists,
+    "Mecha Recipe List Dropout": MechaRecipeListDropout,
     "Mecha Subtract Recipe List": MechaSubtractRecipeList,
 }
 
@@ -898,7 +994,9 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Any Model Mecha Recipe": "Any Model",
     "Already Loaded Model Mecha Recipe": "Already Loaded Model",
     "Lora Mecha Recipe": "Lora",
-    "Mecha Recipe List": "Recipe List",
+    "Mecha Recipe List": "Recipe List",    
+    "Mecha Combine Recipe Lists": "Combine Recipe Lists",
+    "Mecha Recipe List Dropout": "Recipe List Dropout",
     "Mecha Subtract Recipe List": "Subtract Recipe List",
 }
 
