@@ -4,23 +4,21 @@ import { app } from "../../scripts/app.js";
 let customDefInputNames = {};
 
 const MAX_VARARGS_MODELS = 64;  // arbitrary limit to n-models methods (open an issue if this is a problem)
+const recipeListInputs = new WeakMap();
 
 function handleMechaModelListVisibilityByCount(node, visibleCount, _widget, countOffset=0) {
-    if (node.origInputs === undefined) {
-        node.origInputs = node.inputs;
+    let inputs = recipeListInputs.get(node);
+    if (!inputs) {
+        // LiteGraph can update node.inputs in place, so keep a separate array.
+        inputs = [];
+        recipeListInputs.set(node, inputs);
     }
 
     for (let i = 0; i < node.inputs.length; ++i) {
-        const input = node.inputs[i];
-        const origInput = node.origInputs[i];
-
-        for (const key of Object.keys(input)) {
-            origInput[key] = input[key];
-        }
+        inputs[i] = node.inputs[i];
     }
 
-    node.inputs = Array.from(node.origInputs);
-    node.inputs.length = visibleCount + countOffset;
+    node.inputs = inputs.slice(0, visibleCount + countOffset);
     const newHeight = node.computeSize()[1];
     node.setSize([node.size[0], newHeight]);
 }
