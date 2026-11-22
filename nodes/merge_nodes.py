@@ -680,20 +680,22 @@ class MechaRecipeList:
             for i in range(count) if f"recipe_{i}" in kwargs
         ],
 
-MAX_RECIPE_LISTS = 16
+
 class MechaCombineRecipeLists:
-    DESCRIPTION = "Combine multiple recipe inputs into a single MECHA_RECIPE_LIST. Each slot accepts either a MECHA_RECIPE_LIST (extended in place) or a single MECHA_RECIPE (appended). Slots are read in index order (0, 1, ...), so the combined order matches the visual left-to-right layout. Every connected slot is read automatically; there is no count to set. Unconnected and empty slots are silently skipped."
+    DESCRIPTION = "Combine individual recipes and recipe lists in socket order. Use count to set the number of recipe sockets. Unconnected and empty sockets are skipped."
 
     @classmethod
     def INPUT_TYPES(cls):
         return {
-            "required": {},
+            "required": {
+                "count": ("INT", {"default": 2, "min": 0, "max": MAX_VARARGS_MODELS, "step": 1}),
+            },
             "optional": {
                 f"recipe_{i}": (
                     "MECHA_RECIPE,MECHA_RECIPE_LIST",
                     {"tooltip": f"Optional recipe input (slot {i}). Accepts either a MECHA_RECIPE_LIST (its items are concatenated here) or a single MECHA_RECIPE (appended as one item). Slots are read in index order; unconnected/empty slots are skipped."}
                 )
-                for i in range(MAX_RECIPE_LISTS)
+                for i in range(MAX_VARARGS_MODELS)
             },
         }
 
@@ -703,15 +705,13 @@ class MechaCombineRecipeLists:
     OUTPUT_NODE = False
     CATEGORY = "mecha"
 
-    def execute(self, **kwargs):
+    def execute(self, count: int, **kwargs):
         combined = []
-        for i in range(MAX_RECIPE_LISTS):
+        for i in range(count):
             val = kwargs.get(f"recipe_{i}")
             if val is None:
                 continue
             if isinstance(val, list):
-                if not val:
-                    continue
                 combined.extend(val)
             else:
                 combined.append(val)

@@ -3,7 +3,6 @@ import { app } from "../../scripts/app.js";
 
 let customDefInputNames = {};
 
-const MAX_VARARGS_MODELS = 64;  // arbitrary limit to n-models methods (open an issue if this is a problem)
 const recipeListInputs = new WeakMap();
 
 function handleMechaModelListVisibilityByCount(node, visibleCount, _widget, countOffset=0) {
@@ -95,6 +94,9 @@ function inputLogic(node, input) {
 
 const nodeWidgetHandlers = {
     "Mecha Recipe List": {
+        "count": handleMechaModelListVisibilityByCount
+    },
+    "Mecha Combine Recipe Lists": {
         "count": handleMechaModelListVisibilityByCount
     },
     "Mecha Subtract Recipe List": {
