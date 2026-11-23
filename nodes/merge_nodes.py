@@ -718,7 +718,7 @@ class MechaCombineRecipeLists:
         return (combined,)
 
 class MechaRecipeListDropout:
-    DESCRIPTION = "Randomly drop recipes from a MECHA_RECIPE_LIST. Processing order: dropout, then enforce minimum floor, then enforce maximum cap. The whole operation is seeded and reproducible. The floor always wins over the cap if both are set."
+    DESCRIPTION = "Randomly drop recipes from a MECHA_RECIPE_LIST. Processing order: dropout, then enforce minimum floor, then enforce maximum cap. The whole operation is seeded and reproducible. The floor always wins over the cap if both are set. Surviving recipes stay in input order."
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -757,27 +757,23 @@ class MechaRecipeListDropout:
         rng = random.Random(seed)
         kept = []
         dropped = []
-        for r in recipes:
+        for i in range(len(recipes)):
             if rng.random() >= dropout:
-                kept.append(r)
+                kept.append(i)
             else:
-                dropped.append(r)
+                dropped.append(i)
 
         floor = min(minimum, len(recipes))
-        if len(kept) < floor and dropped:
-            deficit = floor - len(kept)
-            reintroduced = rng.sample(dropped, min(deficit, len(dropped)))
-            kept.extend(reintroduced)
+        if len(kept) < floor:
+            kept.extend(rng.sample(dropped, floor - len(kept)))
 
         if maximum >= 0:
             cap = max(maximum, floor)
             if len(kept) > cap:
-                indices = list(range(len(kept)))
-                rng.shuffle(indices)
-                survivors = sorted(indices[:cap])
-                kept = [kept[i] for i in survivors]
+                rng.shuffle(kept)
+                del kept[cap:]
 
-        return (kept,)
+        return ([recipes[i] for i in sorted(kept)],)
 
 class MechaSubtractRecipeList:
     @classmethod
